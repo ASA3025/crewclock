@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Clock, MapPin, CheckCircle } from '@phosphor-icons/react'
 import { Button } from '../components/Button'
+import { Footer } from '../components/Footer'
 import { LoginModal } from '../components/LoginModal'
 
 const pillars = [
@@ -64,9 +65,7 @@ export function Landing() {
         </section>
       </main>
 
-      <footer className="border-t border-border px-4 py-8 text-center text-xs text-muted-fg">
-        Crewclock — built for contracting and field crews.
-      </footer>
+      <Footer />
 
       <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
     </div>

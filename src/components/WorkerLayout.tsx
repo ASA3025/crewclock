@@ -2,12 +2,13 @@ import { Outlet } from 'react-router-dom'
 import { SignOut } from '@phosphor-icons/react'
 import { useAuth } from '../context/AuthContext'
 import { BottomNav } from './BottomNav'
+import { Footer } from './Footer'
 
 export function WorkerLayout() {
   const { signOut } = useAuth()
 
   return (
-    <div className="min-h-screen bg-bg pb-20">
+    <div className="flex min-h-screen flex-col bg-bg pb-20">
       <div className="flex justify-end border-b border-border bg-white px-4 py-2.5">
         <button
           onClick={() => signOut()}
@@ -17,7 +18,10 @@ export function WorkerLayout() {
           Log out
         </button>
       </div>
-      <Outlet />
+      <div className="flex-1">
+        <Outlet />
+      </div>
+      <Footer />
       <BottomNav />
     </div>
   )
