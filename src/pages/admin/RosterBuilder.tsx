@@ -170,7 +170,7 @@ export function AdminRosterBuilder() {
                   <input
                     value={formLocation}
                     onChange={(e) => setFormLocation(e.target.value)}
-                    placeholder="e.g. Block 4"
+                    placeholder="e.g. Bush Rd Orchard, Block 4"
                     className="h-9 rounded-md border border-border px-2 text-xs"
                   />
                   <div className="flex flex-col gap-1">

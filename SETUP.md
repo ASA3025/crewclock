@@ -32,8 +32,10 @@ policies (so businesses can never see each other's data), and the
 ## 4. Deploy the Edge Functions
 
 `create-worker` lets admins add workers from inside the app, `delete-worker`
-lets admins remove them, and `resend-invite` / `set-worker-password` are
-fallbacks for when an invite email doesn't reach a worker. All four need the
+lets admins remove them, `resend-invite` / `set-worker-password` are
+fallbacks for when an invite email doesn't reach a worker, and
+`reverse-geocode` turns a shift's GPS coordinates into a readable address
+on the admin Hours page. All five need the
 [Supabase CLI](https://supabase.com/docs/guides/cli):
 
 ```bash
@@ -44,10 +46,12 @@ supabase functions deploy create-worker
 supabase functions deploy delete-worker
 supabase functions deploy resend-invite
 supabase functions deploy set-worker-password
+supabase functions deploy reverse-geocode
 ```
 
 No extra secrets needed — Supabase injects the project URL and keys into
-every Edge Function automatically.
+every Edge Function automatically. `reverse-geocode` calls OpenStreetMap's
+free Nominatim API, which needs no API key or account of its own either.
 
 Note: removing a worker deletes their Supabase Auth account, which cascades
 (see `schema.sql`) to their `users` row and from there to all of their
@@ -58,6 +62,15 @@ Note: worker invites are sent as Supabase Auth invite emails. The default
 Supabase email sender is rate-limited and fine for the internal test with a
 handful of workers; if you outgrow it, add a custom SMTP provider under
 **Project Settings → Auth**.
+
+Note: the invite and password-reset emails use Crewclock-branded HTML
+templates rather than Supabase's plain defaults —
+[`supabase/email-templates/invite.html`](supabase/email-templates/invite.html)
+and [`recovery.html`](supabase/email-templates/recovery.html). Paste each
+into **Authentication → Email Templates** (Invite user / Reset password) in
+the dashboard; there's no CLI/API way to deploy these, they're dashboard-only
+config, so this is a manual one-time step per Supabase project (including
+if you ever spin up a second one, e.g. staging).
 
 Note: invite/reset emails redirect to whatever **Site URL** is set under
 **Authentication → URL Configuration** in the Supabase dashboard — this is

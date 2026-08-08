@@ -1,0 +1,94 @@
+<!--
+  Crewclock — Supabase Auth "Reset password" email template.
+
+  Paste this into the Supabase dashboard under Authentication → Email
+  Templates → Reset password (replace the entire body). Suggested subject:
+  "Reset your Crewclock password"
+
+  {{ .ConfirmationURL }} is Supabase's built-in action-link variable —
+  same one the invite template uses. See invite.html for notes on why
+  this is table-based HTML with inline styles rather than modern CSS.
+-->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <title>Reset your Crewclock password</title>
+    <!--[if mso]>
+    <noscript>
+      <xml>
+        <o:OfficeDocumentSettings>
+          <o:PixelsPerInch>96</o:PixelsPerInch>
+        </o:OfficeDocumentSettings>
+      </xml>
+    </noscript>
+    <![endif]-->
+    <style>
+      body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+      table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+      body { margin: 0; padding: 0; width: 100% !important; background-color: #f8fafc; }
+    </style>
+  </head>
+  <body style="margin:0; padding:0; background-color:#f8fafc;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f8fafc;">
+      <tr>
+        <td align="center" style="padding: 40px 16px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px; background-color:#ffffff; border:1px solid #e2e8f0; border-radius:16px;">
+            <tr>
+              <td style="padding: 32px 32px 0 32px;">
+                <p style="margin:0; font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif; font-size:18px; font-weight:800; color:#0f172a;">
+                  Crewclock
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 24px 32px 0 32px;">
+                <h1 style="margin:0 0 12px 0; font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif; font-size:22px; font-weight:800; color:#0f172a;">
+                  Reset your password
+                </h1>
+                <p style="margin:0 0 24px 0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif; font-size:15px; line-height:1.6; color:#334155;">
+                  We received a request to reset the password for your Crewclock account. Click below to choose a new one.
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 0 32px;">
+                <table role="presentation" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="border-radius:8px; background-color:#0f172a;">
+                      <a href="{{ .ConfirmationURL }}" target="_blank" style="display:inline-block; padding:12px 24px; font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif; font-size:15px; font-weight:600; color:#ffffff; text-decoration:none; border-radius:8px;">
+                        Reset password
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 24px 32px 32px 32px;">
+                <p style="margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif; font-size:13px; line-height:1.6; color:#64748b;">
+                  If the button doesn't work, copy and paste this link into your browser:<br />
+                  <a href="{{ .ConfirmationURL }}" style="color:#0369a1; word-break:break-all;">{{ .ConfirmationURL }}</a>
+                </p>
+                <p style="margin:16px 0 0 0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif; font-size:13px; line-height:1.6; color:#64748b;">
+                  This link expires soon and can only be used once. If you didn't request this, you can safely ignore this email — your password won't be changed.
+                </p>
+              </td>
+            </tr>
+          </table>
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;">
+            <tr>
+              <td align="center" style="padding: 24px 16px 0 16px;">
+                <p style="margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif; font-size:12px; color:#64748b;">
+                  © 2026 Crewclock · <a href="mailto:arundeepatkar2008@gmail.com" style="color:#64748b;">arundeepatkar2008@gmail.com</a>
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

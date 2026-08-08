@@ -35,6 +35,7 @@ export function AdminHours() {
   const [deleting, setDeleting] = useState(false)
   const [photoTarget, setPhotoTarget] = useState<string | null>(null)
   const [noteTarget, setNoteTarget] = useState<string | null>(null)
+  const [resolvedAddresses, setResolvedAddresses] = useState<Record<string, string>>({})
 
   async function load() {
     if (!appUser) return
@@ -70,6 +71,39 @@ export function AdminHours() {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appUser, from, to, workerFilter])
+
+  // Reverse-geocode any visible shift that has GPS but no cached address
+  // yet — one at a time with a delay between calls, to stay well under
+  // Nominatim's ~1 request/second fair-use limit (see reverse-geocode
+  // Edge Function). Each result is cached on the shift row server-side,
+  // so this only ever runs once per shift, not on every page view.
+  useEffect(() => {
+    const pending = shifts.filter(
+      (s) => s.gps_lat != null && s.gps_lng != null && !s.address && !resolvedAddresses[s.id]
+    )
+    if (pending.length === 0) return
+
+    let cancelled = false
+
+    async function processQueue() {
+      for (const shift of pending) {
+        if (cancelled) return
+        const { data, error } = await supabase.functions.invoke('reverse-geocode', {
+          body: { shift_id: shift.id },
+        })
+        if (!cancelled && !error && data?.address) {
+          setResolvedAddresses((prev) => ({ ...prev, [shift.id]: data.address }))
+        }
+        if (!cancelled) await new Promise((resolve) => setTimeout(resolve, 1100))
+      }
+    }
+
+    processQueue()
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shifts])
 
   async function approveShift(shift: ShiftWithWorker) {
     await supabase
@@ -246,14 +280,21 @@ export function AdminHours() {
                   <td className="px-4 py-3 text-muted-fg">{formatHours(shiftHours(shift))}</td>
                   <td className="px-4 py-3">
                     {shift.gps_lat != null && shift.gps_lng != null ? (
-                      <a
-                        href={`https://www.google.com/maps?q=${shift.gps_lat},${shift.gps_lng}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1 text-accent hover:underline"
-                      >
-                        <MapPin size={14} /> View map
-                      </a>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-fg">
+                          {shift.address ?? resolvedAddresses[shift.id] ?? (
+                            <span className="italic text-muted-fg">Looking up address…</span>
+                          )}
+                        </span>
+                        <a
+                          href={`https://www.google.com/maps?q=${shift.gps_lat},${shift.gps_lng}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-xs text-accent hover:underline"
+                        >
+                          <MapPin size={12} /> View map
+                        </a>
+                      </div>
                     ) : (
                       <span className="text-muted-fg">—</span>
                     )}

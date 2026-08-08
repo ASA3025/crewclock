@@ -1,12 +1,13 @@
 import type { ReactNode } from 'react'
 
-type Tone = 'success' | 'muted' | 'accent' | 'destructive'
+type Tone = 'success' | 'muted' | 'accent' | 'destructive' | 'warning'
 
 const toneClasses: Record<Tone, string> = {
   success: 'bg-success/10 text-success',
   muted: 'bg-muted text-muted-fg',
   accent: 'bg-accent/10 text-accent',
   destructive: 'bg-destructive/10 text-destructive',
+  warning: 'bg-warning/10 text-warning',
 }
 
 export function StatusPill({ tone, icon, children }: { tone: Tone; icon?: ReactNode; children: ReactNode }) {

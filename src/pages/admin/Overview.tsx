@@ -1,23 +1,33 @@
 import { useCallback, useEffect, useState } from 'react'
-import { CheckCircle, Clock, HourglassMedium } from '@phosphor-icons/react'
+import { CheckCircle, Clock, HourglassMedium, Warning } from '@phosphor-icons/react'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabaseClient'
 import { PageHeader } from '../../components/PageHeader'
 import { Card } from '../../components/Card'
 import { StatusPill } from '../../components/StatusPill'
 import { formatHours, shiftHours } from '../../utils/pay'
-import { formatNzTime, nzDateIso, nzEndOfDayInstant, nzStartOfDayInstant } from '../../utils/datetime'
-import type { AppUser, ShiftWithWorker } from '../../types'
+import {
+  formatNzTime,
+  formatWallClockTime,
+  nzDateIso,
+  nzEndOfDayInstant,
+  nzNowMinutes,
+  nzStartOfDayInstant,
+  wallClockMinutes,
+} from '../../utils/datetime'
+import type { AppUser, RosterEntry, ShiftWithWorker } from '../../types'
 
 type WorkerStatus =
   | { kind: 'clocked_in'; since: string }
   | { kind: 'clocked_out'; hoursToday: number }
+  | { kind: 'late'; startTime: string }
   | { kind: 'not_clocked_in' }
 
 const statusOrder: Record<WorkerStatus['kind'], number> = {
   clocked_in: 0,
-  clocked_out: 1,
+  late: 1,
   not_clocked_in: 2,
+  clocked_out: 3,
 }
 
 export function AdminOverview() {
@@ -25,13 +35,14 @@ export function AdminOverview() {
   const [workers, setWorkers] = useState<AppUser[]>([])
   const [clockedIn, setClockedIn] = useState<ShiftWithWorker[]>([])
   const [todayShifts, setTodayShifts] = useState<ShiftWithWorker[]>([])
+  const [todayRoster, setTodayRoster] = useState<Pick<RosterEntry, 'user_id' | 'start_time'>[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
 
   const load = useCallback(async () => {
     if (!appUser) return
 
-    const [workersRes, clockedInRes, todayRes] = await Promise.all([
+    const [workersRes, clockedInRes, todayRes, rosterRes] = await Promise.all([
       supabase
         .from('users')
         .select('*')
@@ -50,11 +61,17 @@ export function AdminOverview() {
         .eq('business_id', appUser.business_id)
         .gte('clock_in_time', nzStartOfDayInstant(nzDateIso()))
         .lte('clock_in_time', nzEndOfDayInstant(nzDateIso())),
+      supabase
+        .from('roster_entries')
+        .select('user_id, start_time')
+        .eq('business_id', appUser.business_id)
+        .eq('date', nzDateIso()),
     ])
 
     setWorkers((workersRes.data as AppUser[]) ?? [])
     setClockedIn((clockedInRes.data as ShiftWithWorker[]) ?? [])
     setTodayShifts((todayRes.data as ShiftWithWorker[]) ?? [])
+    setTodayRoster((rosterRes.data as Pick<RosterEntry, 'user_id' | 'start_time'>[]) ?? [])
     setLoading(false)
   }, [appUser])
 
@@ -77,13 +94,30 @@ export function AdminOverview() {
         return { worker, status: { kind: 'clocked_out', hoursToday } as WorkerStatus }
       }
 
+      // Earliest rostered start time today, if any — "HH:MM:SS" strings
+      // sort lexicographically in chronological order, so this is just
+      // the smallest string among their entries with a start_time set.
+      const earliestStart = todayRoster
+        .filter((r) => r.user_id === worker.id && r.start_time)
+        .map((r) => r.start_time as string)
+        .sort()[0]
+
+      if (earliestStart && wallClockMinutes(earliestStart) < nzNowMinutes()) {
+        return { worker, status: { kind: 'late', startTime: earliestStart } as WorkerStatus }
+      }
+
       return { worker, status: { kind: 'not_clocked_in' } as WorkerStatus }
     })
     .sort((a, b) => statusOrder[a.status.kind] - statusOrder[b.status.kind])
 
   const clockedInCount = workerStatuses.filter((w) => w.status.kind === 'clocked_in').length
   const clockedOutCount = workerStatuses.filter((w) => w.status.kind === 'clocked_out').length
-  const notClockedInCount = workerStatuses.filter((w) => w.status.kind === 'not_clocked_in').length
+  // "Late" is still, factually, not clocked in yet — it gets its own pill
+  // in the list below, but counts here so the three tiles still add up to
+  // the full team.
+  const notClockedInCount = workerStatuses.filter(
+    (w) => w.status.kind === 'not_clocked_in' || w.status.kind === 'late'
+  ).length
   const hoursToday = todayShifts.reduce((sum, s) => sum + shiftHours(s), 0)
 
   const filteredStatuses = workerStatuses.filter(({ worker }) =>
@@ -154,6 +188,15 @@ export function AdminOverview() {
                     <span className="text-xs text-muted-fg">{formatHours(status.hoursToday)} today</span>
                     <StatusPill tone="accent" icon={<CheckCircle size={13} weight="fill" />}>
                       Clocked out
+                    </StatusPill>
+                  </div>
+                )}
+
+                {status.kind === 'late' && (
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-muted-fg">Due {formatWallClockTime(status.startTime)}</span>
+                    <StatusPill tone="warning" icon={<Warning size={13} weight="fill" />}>
+                      Running late
                     </StatusPill>
                   </div>
                 )}

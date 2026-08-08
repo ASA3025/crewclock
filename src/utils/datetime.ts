@@ -115,3 +115,26 @@ export function formatShiftTimeRange(
   if (endTime) return `Until ${formatWallClockTime(endTime)}`
   return null
 }
+
+// Minutes since midnight for a plain "HH:MM" or "HH:MM:SS" wall-clock
+// time, so two such times (or a wall-clock time and "now") can be compared
+// directly without going through any timezone/instant conversion.
+export function wallClockMinutes(time: string): number {
+  const [hours, minutes] = time.split(':').map(Number)
+  return hours * 60 + minutes
+}
+
+// "Now", as minutes since midnight in NZ wall-clock time — the same
+// reference frame as wallClockMinutes, so a roster entry's start_time can
+// be compared directly against the current time of day.
+export function nzNowMinutes(): number {
+  const parts = new Intl.DateTimeFormat('en-NZ', {
+    timeZone: NZ_TIME_ZONE,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date())
+  const hour = Number(parts.find((p) => p.type === 'hour')?.value ?? '0')
+  const minute = Number(parts.find((p) => p.type === 'minute')?.value ?? '0')
+  return hour * 60 + minute
+}

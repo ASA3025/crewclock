@@ -34,6 +34,10 @@ create table public.shifts (
   clock_out_time timestamptz,
   gps_lat double precision,
   gps_lng double precision,
+  -- Reverse-geocoded from gps_lat/gps_lng on first admin view (see the
+  -- reverse-geocode Edge Function) — cached here so a shift is only ever
+  -- looked up once, not re-geocoded on every page view.
+  address text,
   note text,
   photo_url text,
   approved boolean not null default false,

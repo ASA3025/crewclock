@@ -25,6 +25,7 @@ export interface Shift {
   clock_out_time: string | null
   gps_lat: number | null
   gps_lng: number | null
+  address: string | null
   note: string | null
   photo_url: string | null
   approved: boolean
