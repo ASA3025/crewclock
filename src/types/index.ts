@@ -68,3 +68,16 @@ export interface WorkerNoteWithContext extends WorkerNote {
   shifts: Pick<Shift, 'clock_in_time'> | null
   roster_entries: Pick<RosterEntry, 'date' | 'location_label'> | null
 }
+
+export interface WorkerNoteReply {
+  id: string
+  worker_note_id: string
+  business_id: string
+  author_id: string
+  message: string
+  created_at: string
+}
+
+export interface WorkerNoteReplyWithAuthor extends WorkerNoteReply {
+  users: Pick<AppUser, 'id' | 'name' | 'role'>
+}

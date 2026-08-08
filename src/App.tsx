@@ -12,6 +12,7 @@ import { isAuthRedirectUrl, isPendingPasswordSetup, markPendingPasswordSetup } f
 import { WorkerHome } from './pages/worker/Home'
 import { WorkerHoursHistory } from './pages/worker/HoursHistory'
 import { WorkerRoster } from './pages/worker/Roster'
+import { WorkerNotes } from './pages/worker/Notes'
 import { AdminOverview } from './pages/admin/Overview'
 import { AdminHours } from './pages/admin/Hours'
 import { AdminRosterBuilder } from './pages/admin/RosterBuilder'
@@ -49,6 +50,7 @@ function App() {
               <Route path="/worker/home" element={<WorkerHome />} />
               <Route path="/worker/hours" element={<WorkerHoursHistory />} />
               <Route path="/worker/roster" element={<WorkerRoster />} />
+              <Route path="/worker/notes" element={<WorkerNotes />} />
             </Route>
           </Route>
 

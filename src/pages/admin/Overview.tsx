@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabaseClient'
 import { PageHeader } from '../../components/PageHeader'
 import { Card } from '../../components/Card'
 import { Button } from '../../components/Button'
+import { NoteReplyThread } from '../../components/NoteReplyThread'
 import { StatusPill } from '../../components/StatusPill'
 import { formatHours, isStaleOpenShift, shiftHours } from '../../utils/pay'
 import {
@@ -17,7 +18,13 @@ import {
   nzStartOfDayInstant,
   wallClockMinutes,
 } from '../../utils/datetime'
-import type { AppUser, RosterEntry, ShiftWithWorker, WorkerNoteWithContext } from '../../types'
+import type {
+  AppUser,
+  RosterEntry,
+  ShiftWithWorker,
+  WorkerNoteReplyWithAuthor,
+  WorkerNoteWithContext,
+} from '../../types'
 
 type WorkerStatus =
   | { kind: 'stale_clocked_in'; since: string }
@@ -47,6 +54,7 @@ export function AdminOverview() {
   const [todayShifts, setTodayShifts] = useState<ShiftWithWorker[]>([])
   const [todayRoster, setTodayRoster] = useState<Pick<RosterEntry, 'user_id' | 'start_time'>[]>([])
   const [notes, setNotes] = useState<WorkerNoteWithContext[]>([])
+  const [replies, setReplies] = useState<Record<string, WorkerNoteReplyWithAuthor[]>>({})
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
 
@@ -89,7 +97,27 @@ export function AdminOverview() {
     setClockedIn((clockedInRes.data as ShiftWithWorker[]) ?? [])
     setTodayShifts((todayRes.data as ShiftWithWorker[]) ?? [])
     setTodayRoster((rosterRes.data as Pick<RosterEntry, 'user_id' | 'start_time'>[]) ?? [])
-    setNotes((notesRes.data as WorkerNoteWithContext[]) ?? [])
+    const loadedNotes = (notesRes.data as WorkerNoteWithContext[]) ?? []
+    setNotes(loadedNotes)
+
+    if (loadedNotes.length > 0) {
+      const { data: repliesData } = await supabase
+        .from('worker_note_replies')
+        .select('*, users(id, name, role)')
+        .in(
+          'worker_note_id',
+          loadedNotes.map((n) => n.id)
+        )
+        .order('created_at', { ascending: true })
+      const grouped: Record<string, WorkerNoteReplyWithAuthor[]> = {}
+      for (const r of (repliesData as WorkerNoteReplyWithAuthor[]) ?? []) {
+        ;(grouped[r.worker_note_id] ??= []).push(r)
+      }
+      setReplies(grouped)
+    } else {
+      setReplies({})
+    }
+
     setLoading(false)
   }, [appUser])
 
@@ -204,36 +232,46 @@ export function AdminOverview() {
             </h2>
             <div className="flex flex-col gap-2">
               {notes.map((n) => (
-                <Card key={n.id} className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-sm font-semibold text-fg">{n.users.name}</p>
-                      <StatusPill tone={n.shifts ? 'accent' : n.roster_entries ? 'warning' : 'muted'}>
-                        {n.shifts
-                          ? formatNzDate(n.shifts.clock_in_time, {
-                              weekday: 'short',
-                              day: 'numeric',
-                              month: 'short',
-                            })
-                          : n.roster_entries
-                            ? `Upcoming: ${formatNzDate(n.roster_entries.date, {
+                <Card key={n.id} className="flex flex-col gap-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-semibold text-fg">{n.users.name}</p>
+                        <StatusPill tone={n.shifts ? 'accent' : n.roster_entries ? 'warning' : 'muted'}>
+                          {n.shifts
+                            ? formatNzDate(n.shifts.clock_in_time, {
                                 weekday: 'short',
                                 day: 'numeric',
                                 month: 'short',
-                              })} · ${n.roster_entries.location_label}`
-                            : 'General note'}
-                      </StatusPill>
+                              })
+                            : n.roster_entries
+                              ? `Upcoming: ${formatNzDate(n.roster_entries.date, {
+                                  weekday: 'short',
+                                  day: 'numeric',
+                                  month: 'short',
+                                })} · ${n.roster_entries.location_label}`
+                              : 'General note'}
+                        </StatusPill>
+                      </div>
+                      <p className="mt-1 text-sm text-fg">{n.message}</p>
                     </div>
-                    <p className="mt-1 text-sm text-fg">{n.message}</p>
+                    <Button
+                      size="md"
+                      variant="secondary"
+                      className="h-8 shrink-0 px-3 text-xs"
+                      onClick={() => resolveNote(n.id)}
+                    >
+                      Mark resolved
+                    </Button>
                   </div>
-                  <Button
-                    size="md"
-                    variant="secondary"
-                    className="h-8 shrink-0 px-3 text-xs"
-                    onClick={() => resolveNote(n.id)}
-                  >
-                    Mark resolved
-                  </Button>
+                  {appUser && (
+                    <NoteReplyThread
+                      noteId={n.id}
+                      replies={replies[n.id] ?? []}
+                      currentUserId={appUser.id}
+                      onSent={load}
+                    />
+                  )}
                 </Card>
               ))}
             </div>

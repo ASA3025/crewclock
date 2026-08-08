@@ -1,10 +1,11 @@
 import { NavLink } from 'react-router-dom'
-import { House, ClockCounterClockwise, CalendarBlank } from '@phosphor-icons/react'
+import { House, ClockCounterClockwise, CalendarBlank, Flag } from '@phosphor-icons/react'
 
 const items = [
   { to: '/worker/home', label: 'Home', icon: House },
   { to: '/worker/hours', label: 'Hours', icon: ClockCounterClockwise },
   { to: '/worker/roster', label: 'Roster', icon: CalendarBlank },
+  { to: '/worker/notes', label: 'Flags', icon: Flag },
 ]
 
 export function BottomNav() {

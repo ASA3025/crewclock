@@ -77,6 +77,19 @@ create table public.worker_notes (
   )
 );
 
+-- A lightweight back-and-forth thread on a worker_note: either the admin
+-- replying to a worker's flag, or the worker replying back. Never deleted
+-- independently of its parent note (no delete policy on worker_notes
+-- either), so cascading here is safe and needs no set-null handling.
+create table public.worker_note_replies (
+  id uuid primary key default gen_random_uuid(),
+  worker_note_id uuid not null references public.worker_notes (id) on delete cascade,
+  business_id uuid not null references public.businesses (id) on delete cascade,
+  author_id uuid not null references public.users (id) on delete cascade,
+  message text not null,
+  created_at timestamptz not null default now()
+);
+
 create index shifts_user_id_idx on public.shifts (user_id);
 create index shifts_business_id_idx on public.shifts (business_id);
 create index roster_entries_business_id_idx on public.roster_entries (business_id);
@@ -84,6 +97,8 @@ create index roster_entries_user_id_idx on public.roster_entries (user_id);
 create index users_business_id_idx on public.users (business_id);
 create index worker_notes_business_id_idx on public.worker_notes (business_id);
 create index worker_notes_user_id_idx on public.worker_notes (user_id);
+create index worker_note_replies_note_id_idx on public.worker_note_replies (worker_note_id);
+create index worker_note_replies_business_id_idx on public.worker_note_replies (business_id);
 
 -- ---------------------------------------------------------------------------
 -- Helper functions (security definer so RLS policies on `users` don't
@@ -120,6 +135,7 @@ alter table public.users enable row level security;
 alter table public.shifts enable row level security;
 alter table public.roster_entries enable row level security;
 alter table public.worker_notes enable row level security;
+alter table public.worker_note_replies enable row level security;
 
 -- businesses: read-only from the client, scoped to your own business.
 -- Rows are created manually (see SETUP.md) using the Supabase service role,
@@ -192,6 +208,18 @@ create policy "admin update business notes" on public.worker_notes
 -- Function using the service role key — it also looks up the business's
 -- admin emails to send a notification, which a worker's own RLS-scoped
 -- client can't do (can't see other users' emails).
+
+-- worker_note_replies
+create policy "worker select own note replies" on public.worker_note_replies
+  for select using (
+    worker_note_id in (select id from public.worker_notes where user_id = public.app_user_id())
+  );
+
+create policy "admin select business note replies" on public.worker_note_replies
+  for select using (public.app_role() = 'admin' and business_id = public.app_business_id());
+-- No insert policy: replies are created by the submit-note-reply Edge
+-- Function using the service role key — same reasoning as worker_notes
+-- above (it looks up the other party's email to notify them).
 
 -- ---------------------------------------------------------------------------
 -- Storage: shift photos
