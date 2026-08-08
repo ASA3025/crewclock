@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
-import { CheckCircle, Clock, HourglassMedium, Warning } from '@phosphor-icons/react'
+import { CheckCircle, Clock, Flag, HourglassMedium, Warning } from '@phosphor-icons/react'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabaseClient'
 import { PageHeader } from '../../components/PageHeader'
 import { Card } from '../../components/Card'
+import { Button } from '../../components/Button'
 import { StatusPill } from '../../components/StatusPill'
 import { formatHours, isStaleOpenShift, shiftHours } from '../../utils/pay'
 import {
+  formatNzDate,
   formatNzTime,
   formatWallClockTime,
   nzDateIso,
@@ -15,7 +17,7 @@ import {
   nzStartOfDayInstant,
   wallClockMinutes,
 } from '../../utils/datetime'
-import type { AppUser, RosterEntry, ShiftWithWorker } from '../../types'
+import type { AppUser, RosterEntry, ShiftWithWorker, WorkerNoteWithContext } from '../../types'
 
 type WorkerStatus =
   | { kind: 'stale_clocked_in'; since: string }
@@ -38,13 +40,14 @@ export function AdminOverview() {
   const [clockedIn, setClockedIn] = useState<ShiftWithWorker[]>([])
   const [todayShifts, setTodayShifts] = useState<ShiftWithWorker[]>([])
   const [todayRoster, setTodayRoster] = useState<Pick<RosterEntry, 'user_id' | 'start_time'>[]>([])
+  const [notes, setNotes] = useState<WorkerNoteWithContext[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
 
   const load = useCallback(async () => {
     if (!appUser) return
 
-    const [workersRes, clockedInRes, todayRes, rosterRes] = await Promise.all([
+    const [workersRes, clockedInRes, todayRes, rosterRes, notesRes] = await Promise.all([
       supabase
         .from('users')
         .select('*')
@@ -68,14 +71,26 @@ export function AdminOverview() {
         .select('user_id, start_time')
         .eq('business_id', appUser.business_id)
         .eq('date', nzDateIso()),
+      supabase
+        .from('worker_notes')
+        .select('*, users(id, name), shifts(clock_in_time)')
+        .eq('business_id', appUser.business_id)
+        .eq('resolved', false)
+        .order('created_at', { ascending: false }),
     ])
 
     setWorkers((workersRes.data as AppUser[]) ?? [])
     setClockedIn((clockedInRes.data as ShiftWithWorker[]) ?? [])
     setTodayShifts((todayRes.data as ShiftWithWorker[]) ?? [])
     setTodayRoster((rosterRes.data as Pick<RosterEntry, 'user_id' | 'start_time'>[]) ?? [])
+    setNotes((notesRes.data as WorkerNoteWithContext[]) ?? [])
     setLoading(false)
   }, [appUser])
+
+  async function resolveNote(id: string) {
+    await supabase.from('worker_notes').update({ resolved: true }).eq('id', id)
+    setNotes((prev) => prev.filter((n) => n.id !== id))
+  }
 
   useEffect(() => {
     load()
@@ -155,6 +170,38 @@ export function AdminOverview() {
           </Card>
         </div>
         <p className="text-xs text-muted-fg">{formatHours(hoursToday)} logged across the team today</p>
+
+        {notes.length > 0 && (
+          <div>
+            <h2 className="mb-3 flex items-center gap-1.5 font-heading text-sm font-bold text-fg">
+              <Flag size={15} weight="fill" className="text-destructive" /> Flags from your crew
+            </h2>
+            <div className="flex flex-col gap-2">
+              {notes.map((n) => (
+                <Card key={n.id} className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-fg">{n.users.name}</p>
+                    {n.shifts && (
+                      <p className="text-xs text-muted-fg">
+                        About the shift on{' '}
+                        {formatNzDate(n.shifts.clock_in_time, { day: 'numeric', month: 'short' })}
+                      </p>
+                    )}
+                    <p className="mt-1 text-sm text-fg">{n.message}</p>
+                  </div>
+                  <Button
+                    size="md"
+                    variant="secondary"
+                    className="h-8 shrink-0 px-3 text-xs"
+                    onClick={() => resolveNote(n.id)}
+                  >
+                    Mark resolved
+                  </Button>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div>
           <div className="mb-3 flex items-center justify-between gap-3">

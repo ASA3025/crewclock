@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Clock, MapPin, NavigationArrow, Camera, Warning } from '@phosphor-icons/react'
+import { ChatCircleText, Clock, MapPin, NavigationArrow, Camera, Warning } from '@phosphor-icons/react'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabaseClient'
 import { Button } from '../../components/Button'
 import { Card } from '../../components/Card'
+import { FlagAdminModal } from '../../components/FlagAdminModal'
 import { StatusPill } from '../../components/StatusPill'
 import { estimateGross, formatCurrency, formatHours, isStaleOpenShift, shiftHours } from '../../utils/pay'
 import {
@@ -38,6 +39,7 @@ export function WorkerHome() {
   const [gpsStatus, setGpsStatus] = useState<'idle' | 'locating' | 'ok' | 'denied'>('idle')
   const [busy, setBusy] = useState(false)
   const [, forceTick] = useState(0)
+  const [flagOpen, setFlagOpen] = useState(false)
 
   useEffect(() => {
     if (!appUser) return
@@ -279,6 +281,15 @@ export function WorkerHome() {
           <p className="text-sm text-muted-fg">No location assigned for today.</p>
         )}
       </Card>
+
+      <button
+        onClick={() => setFlagOpen(true)}
+        className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-border py-3 text-sm font-medium text-muted-fg transition-colors duration-150 hover:border-accent hover:text-accent"
+      >
+        <ChatCircleText size={18} /> Message your admin
+      </button>
+
+      <FlagAdminModal open={flagOpen} onClose={() => setFlagOpen(false)} />
     </div>
   )
 }

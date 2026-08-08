@@ -33,9 +33,10 @@ policies (so businesses can never see each other's data), and the
 
 `create-worker` lets admins add workers from inside the app, `delete-worker`
 lets admins remove them, `resend-invite` / `set-worker-password` are
-fallbacks for when an invite email doesn't reach a worker, and
-`reverse-geocode` turns a shift's GPS coordinates into a readable address
-on the admin Hours page. All five need the
+fallbacks for when an invite email doesn't reach a worker, `reverse-geocode`
+turns a shift's GPS coordinates into a readable address on the admin Hours
+page, and `submit-worker-note` handles a worker flagging a shift or sending
+a note to their admin. All six need the
 [Supabase CLI](https://supabase.com/docs/guides/cli):
 
 ```bash
@@ -47,11 +48,29 @@ supabase functions deploy delete-worker
 supabase functions deploy resend-invite
 supabase functions deploy set-worker-password
 supabase functions deploy reverse-geocode
+supabase functions deploy submit-worker-note
 ```
 
-No extra secrets needed — Supabase injects the project URL and keys into
-every Edge Function automatically. `reverse-geocode` calls OpenStreetMap's
-free Nominatim API, which needs no API key or account of its own either.
+No extra secrets needed for most of these — Supabase injects the project
+URL and keys into every Edge Function automatically, and `reverse-geocode`
+calls OpenStreetMap's free Nominatim API, which needs no API key or account
+of its own either.
+
+`submit-worker-note` is the exception: emailing the admin when a worker
+flags something needs a [Resend](https://resend.com) account and API key —
+
+```bash
+supabase secrets set RESEND_API_KEY=your-resend-api-key
+```
+
+Without this secret set, flagging still works and shows up in the admin's
+Overview page either way — the note is saved regardless, only the email
+notification is skipped. Resend's shared test sending address
+(`onboarding@resend.dev`, hardcoded in the function) only reliably delivers
+to the email your Resend account itself is registered with — to actually
+notify real admin addresses, verify your own sending domain in Resend and
+update the `from` address in
+[`supabase/functions/submit-worker-note/index.ts`](supabase/functions/submit-worker-note/index.ts).
 
 Note: removing a worker deletes their Supabase Auth account, which cascades
 (see `schema.sql`) to their `users` row and from there to all of their

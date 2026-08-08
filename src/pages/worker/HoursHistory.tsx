@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { MapPin, CheckCircle, HourglassMedium, Warning, XCircle } from '@phosphor-icons/react'
+import { Flag, MapPin, CheckCircle, HourglassMedium, Warning, XCircle } from '@phosphor-icons/react'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabaseClient'
 import { PageHeader } from '../../components/PageHeader'
 import { Card } from '../../components/Card'
+import { FlagAdminModal } from '../../components/FlagAdminModal'
 import { StatusPill } from '../../components/StatusPill'
 import { estimateGross, formatCurrency, formatHours, shiftHours } from '../../utils/pay'
 import { formatNzDate, formatNzTime, nzDateIso, nzStartOfWeekIso } from '../../utils/datetime'
@@ -23,6 +24,21 @@ export function WorkerHoursHistory() {
   const [shifts, setShifts] = useState<Shift[]>([])
   const [loading, setLoading] = useState(true)
   const [range, setRange] = useState<Range>('week')
+  const [flaggedShiftIds, setFlaggedShiftIds] = useState<Set<string>>(new Set())
+  const [flagTarget, setFlagTarget] = useState<Shift | null>(null)
+
+  function loadFlags() {
+    if (!appUser) return
+    supabase
+      .from('worker_notes')
+      .select('shift_id')
+      .eq('user_id', appUser.id)
+      .eq('resolved', false)
+      .not('shift_id', 'is', null)
+      .then(({ data }) => {
+        setFlaggedShiftIds(new Set((data ?? []).map((n) => n.shift_id as string)))
+      })
+  }
 
   useEffect(() => {
     if (!appUser) return
@@ -36,6 +52,8 @@ export function WorkerHoursHistory() {
         setShifts((data as Shift[]) ?? [])
         setLoading(false)
       })
+    loadFlags()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appUser])
 
   const currentNzMonth = nzDateIso().slice(0, 7)
@@ -136,9 +154,29 @@ export function WorkerHoursHistory() {
                 className="mt-1 h-32 w-full rounded-lg border border-border object-cover"
               />
             )}
+            {flaggedShiftIds.has(shift.id) ? (
+              <p className="flex items-center gap-1 text-xs text-muted-fg">
+                <Flag size={13} weight="fill" /> Flagged — awaiting your admin
+              </p>
+            ) : (
+              <button
+                onClick={() => setFlagTarget(shift)}
+                className="flex w-fit cursor-pointer items-center gap-1 text-xs font-medium text-accent hover:underline"
+              >
+                <Flag size={13} /> Flag this shift
+              </button>
+            )}
           </Card>
         ))}
       </div>
+
+      <FlagAdminModal
+        open={flagTarget != null}
+        onClose={() => setFlagTarget(null)}
+        shiftId={flagTarget?.id}
+        shiftLabel={flagTarget ? formatNzDate(flagTarget.clock_in_time, { day: 'numeric', month: 'short' }) : undefined}
+        onSent={loadFlags}
+      />
     </div>
   )
 }

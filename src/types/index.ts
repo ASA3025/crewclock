@@ -51,3 +51,18 @@ export interface RosterEntry {
 export interface RosterEntryWithWorker extends RosterEntry {
   users: Pick<AppUser, 'id' | 'name'>
 }
+
+export interface WorkerNote {
+  id: string
+  user_id: string
+  business_id: string
+  shift_id: string | null
+  message: string
+  resolved: boolean
+  created_at: string
+}
+
+export interface WorkerNoteWithContext extends WorkerNote {
+  users: Pick<AppUser, 'id' | 'name'>
+  shifts: Pick<Shift, 'clock_in_time'> | null
+}

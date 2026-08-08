@@ -59,11 +59,26 @@ create table public.roster_entries (
   created_at timestamptz not null default now()
 );
 
+create table public.worker_notes (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.users (id) on delete cascade,
+  business_id uuid not null references public.businesses (id) on delete cascade,
+  -- Optional — a general note to the admin has no shift attached. Set
+  -- null (not cascade-deleted) if the shift is later removed, so the note
+  -- itself stays as a record even without the shift it was about.
+  shift_id uuid references public.shifts (id) on delete set null,
+  message text not null,
+  resolved boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
 create index shifts_user_id_idx on public.shifts (user_id);
 create index shifts_business_id_idx on public.shifts (business_id);
 create index roster_entries_business_id_idx on public.roster_entries (business_id);
 create index roster_entries_user_id_idx on public.roster_entries (user_id);
 create index users_business_id_idx on public.users (business_id);
+create index worker_notes_business_id_idx on public.worker_notes (business_id);
+create index worker_notes_user_id_idx on public.worker_notes (user_id);
 
 -- ---------------------------------------------------------------------------
 -- Helper functions (security definer so RLS policies on `users` don't
@@ -99,6 +114,7 @@ alter table public.businesses enable row level security;
 alter table public.users enable row level security;
 alter table public.shifts enable row level security;
 alter table public.roster_entries enable row level security;
+alter table public.worker_notes enable row level security;
 
 -- businesses: read-only from the client, scoped to your own business.
 -- Rows are created manually (see SETUP.md) using the Supabase service role,
@@ -156,6 +172,21 @@ create policy "admin update business roster" on public.roster_entries
 
 create policy "admin delete business roster" on public.roster_entries
   for delete using (public.app_role() = 'admin' and business_id = public.app_business_id());
+
+-- worker_notes
+create policy "worker select own notes" on public.worker_notes
+  for select using (user_id = public.app_user_id());
+
+create policy "admin select business notes" on public.worker_notes
+  for select using (public.app_role() = 'admin' and business_id = public.app_business_id());
+
+create policy "admin update business notes" on public.worker_notes
+  for update using (public.app_role() = 'admin' and business_id = public.app_business_id())
+  with check (public.app_role() = 'admin' and business_id = public.app_business_id());
+-- No insert policy: notes are created by the submit-worker-note Edge
+-- Function using the service role key — it also looks up the business's
+-- admin emails to send a notification, which a worker's own RLS-scoped
+-- client can't do (can't see other users' emails).
 
 -- ---------------------------------------------------------------------------
 -- Storage: shift photos
