@@ -74,10 +74,8 @@ export interface WorkerNoteReply {
   worker_note_id: string
   business_id: string
   author_id: string
+  author_name: string
+  author_role: Role
   message: string
   created_at: string
-}
-
-export interface WorkerNoteReplyWithAuthor extends WorkerNoteReply {
-  users: Pick<AppUser, 'id' | 'name' | 'role'>
 }

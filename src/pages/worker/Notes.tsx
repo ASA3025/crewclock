@@ -6,12 +6,12 @@ import { Card } from '../../components/Card'
 import { NoteReplyThread } from '../../components/NoteReplyThread'
 import { StatusPill } from '../../components/StatusPill'
 import { formatNzDate } from '../../utils/datetime'
-import type { WorkerNoteReplyWithAuthor, WorkerNoteWithContext } from '../../types'
+import type { WorkerNoteReply, WorkerNoteWithContext } from '../../types'
 
 export function WorkerNotes() {
   const { appUser } = useAuth()
   const [notes, setNotes] = useState<WorkerNoteWithContext[]>([])
-  const [replies, setReplies] = useState<Record<string, WorkerNoteReplyWithAuthor[]>>({})
+  const [replies, setReplies] = useState<Record<string, WorkerNoteReply[]>>({})
   const [loading, setLoading] = useState(true)
 
   const load = useCallback(async () => {
@@ -29,14 +29,14 @@ export function WorkerNotes() {
     if (loadedNotes.length > 0) {
       const { data: repliesData } = await supabase
         .from('worker_note_replies')
-        .select('*, users(id, name, role)')
+        .select('*')
         .in(
           'worker_note_id',
           loadedNotes.map((n) => n.id)
         )
         .order('created_at', { ascending: true })
-      const grouped: Record<string, WorkerNoteReplyWithAuthor[]> = {}
-      for (const r of (repliesData as WorkerNoteReplyWithAuthor[]) ?? []) {
+      const grouped: Record<string, WorkerNoteReply[]> = {}
+      for (const r of (repliesData as WorkerNoteReply[]) ?? []) {
         ;(grouped[r.worker_note_id] ??= []).push(r)
       }
       setReplies(grouped)

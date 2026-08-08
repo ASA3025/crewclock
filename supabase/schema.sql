@@ -81,11 +81,23 @@ create table public.worker_notes (
 -- replying to a worker's flag, or the worker replying back. Never deleted
 -- independently of its parent note (no delete policy on worker_notes
 -- either), so cascading here is safe and needs no set-null handling.
+--
+-- author_name/author_role are a deliberate denormalization, captured at
+-- send time by the submit-note-reply Edge Function (which already has
+-- them from the caller's own profile) instead of being read back out via
+-- a join to `users`. A worker's RLS policy on `users` is "select self"
+-- only, so a join from a reply to an *admin* author's users row would be
+-- silently filtered to null by RLS when a worker reads their own note's
+-- thread — crashing any UI that assumes the joined author is always
+-- present. Storing the name/role directly here avoids that cross-role
+-- visibility problem entirely rather than widening `users` RLS for it.
 create table public.worker_note_replies (
   id uuid primary key default gen_random_uuid(),
   worker_note_id uuid not null references public.worker_notes (id) on delete cascade,
   business_id uuid not null references public.businesses (id) on delete cascade,
   author_id uuid not null references public.users (id) on delete cascade,
+  author_name text not null,
+  author_role text not null check (author_role in ('admin', 'worker')),
   message text not null,
   created_at timestamptz not null default now()
 );

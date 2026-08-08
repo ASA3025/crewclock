@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { Button } from './Button'
-import type { WorkerNoteReplyWithAuthor } from '../types'
+import type { WorkerNoteReply } from '../types'
 
 export function NoteReplyThread({
   noteId,
@@ -10,7 +10,7 @@ export function NoteReplyThread({
   onSent,
 }: {
   noteId: string
-  replies: WorkerNoteReplyWithAuthor[]
+  replies: WorkerNoteReply[]
   currentUserId: string
   onSent: () => void
 }) {
@@ -42,8 +42,8 @@ export function NoteReplyThread({
       {replies.map((r) => (
         <div key={r.id}>
           <p className="text-xs font-semibold text-fg">
-            {r.author_id === currentUserId ? 'You' : r.users.name}
-            {r.users.role === 'admin' && r.author_id !== currentUserId ? ' (Admin)' : ''}
+            {r.author_id === currentUserId ? 'You' : r.author_name}
+            {r.author_role === 'admin' && r.author_id !== currentUserId ? ' (Admin)' : ''}
           </p>
           <p className="text-sm text-fg">{r.message}</p>
         </div>

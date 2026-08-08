@@ -106,6 +106,8 @@ Deno.serve(async (req: Request) => {
     worker_note_id: note.id,
     business_id: callerProfile.business_id,
     author_id: callerProfile.id,
+    author_name: callerProfile.name,
+    author_role: callerProfile.role,
     message: message.trim(),
   })
 
