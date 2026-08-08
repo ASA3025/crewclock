@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ChatCircleText, Clock, MapPin, NavigationArrow, Camera, Warning } from '@phosphor-icons/react'
+import { ChatCircleText, Clock, Flag, MapPin, NavigationArrow, Camera, Warning } from '@phosphor-icons/react'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabaseClient'
 import { Button } from '../../components/Button'
@@ -40,6 +40,8 @@ export function WorkerHome() {
   const [busy, setBusy] = useState(false)
   const [, forceTick] = useState(0)
   const [flagOpen, setFlagOpen] = useState(false)
+  const [todayRosterFlagged, setTodayRosterFlagged] = useState(false)
+  const [flagRosterOpen, setFlagRosterOpen] = useState(false)
 
   useEffect(() => {
     if (!appUser) return
@@ -60,7 +62,19 @@ export function WorkerHome() {
       .eq('user_id', appUser.id)
       .eq('date', nzDateIso())
       .maybeSingle()
-      .then(({ data }) => setTodayRoster(data as RosterEntry | null))
+      .then(({ data }) => {
+        const entry = data as RosterEntry | null
+        setTodayRoster(entry)
+        if (!entry) return
+        supabase
+          .from('worker_notes')
+          .select('id')
+          .eq('user_id', appUser.id)
+          .eq('roster_entry_id', entry.id)
+          .eq('resolved', false)
+          .maybeSingle()
+          .then(({ data: noteData }) => setTodayRosterFlagged(!!noteData))
+      })
 
     supabase
       .from('shifts')
@@ -276,6 +290,18 @@ export function WorkerHome() {
                 {formatShiftTimeRange(todayRoster.start_time, todayRoster.end_time)}
               </p>
             )}
+            {todayRosterFlagged ? (
+              <p className="mt-2 flex items-center gap-1 text-xs text-muted-fg">
+                <Flag size={13} weight="fill" /> Flagged — awaiting your admin
+              </p>
+            ) : (
+              <button
+                onClick={() => setFlagRosterOpen(true)}
+                className="mt-2 flex w-fit cursor-pointer items-center gap-1 text-xs font-medium text-accent hover:underline"
+              >
+                <Flag size={13} /> Flag this shift
+              </button>
+            )}
           </>
         ) : (
           <p className="text-sm text-muted-fg">No location assigned for today.</p>
@@ -290,6 +316,14 @@ export function WorkerHome() {
       </button>
 
       <FlagAdminModal open={flagOpen} onClose={() => setFlagOpen(false)} />
+
+      <FlagAdminModal
+        open={flagRosterOpen}
+        onClose={() => setFlagRosterOpen(false)}
+        rosterEntryId={todayRoster?.id}
+        rosterLabel={todayRoster ? formatNzDate(todayRoster.date, { day: 'numeric', month: 'short' }) : undefined}
+        onSent={() => setTodayRosterFlagged(true)}
+      />
     </div>
   )
 }
