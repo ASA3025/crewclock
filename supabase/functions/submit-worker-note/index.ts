@@ -69,17 +69,23 @@ Deno.serve(async (req: Request) => {
     return json({ error: 'Could not identify your account' }, 403)
   }
 
-  const { message, shift_id, site_url } = await req.json()
+  const { message, shift_id, roster_entry_id, site_url } = await req.json()
 
   if (typeof message !== 'string' || !message.trim()) {
     return json({ error: 'message is required' }, 400)
+  }
+
+  if (shift_id && roster_entry_id) {
+    return json({ error: 'A note can be about a shift or a roster entry, not both' }, 400)
   }
 
   // Admin client with the service role key, used only after the caller's
   // own identity has been confirmed above.
   const adminClient = createClient(supabaseUrl, serviceRoleKey)
 
-  let shiftClockIn: string | null = null
+  // A short, human-readable line describing what the note is about, used
+  // in the email notification below.
+  let contextLine: string | null = null
 
   if (shift_id) {
     const { data: shift, error: shiftError } = await adminClient
@@ -96,13 +102,37 @@ Deno.serve(async (req: Request) => {
     ) {
       return json({ error: 'Shift not found' }, 404)
     }
-    shiftClockIn = shift.clock_in_time
+    const clockInLabel = new Date(shift.clock_in_time).toLocaleString('en-NZ', {
+      timeZone: 'Pacific/Auckland',
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    })
+    contextLine = `About the shift starting ${clockInLabel}.`
+  }
+
+  if (roster_entry_id) {
+    const { data: entry, error: entryError } = await adminClient
+      .from('roster_entries')
+      .select('user_id, business_id, date, location_label')
+      .eq('id', roster_entry_id)
+      .single()
+
+    if (
+      entryError ||
+      !entry ||
+      entry.user_id !== callerProfile.id ||
+      entry.business_id !== callerProfile.business_id
+    ) {
+      return json({ error: 'Roster entry not found' }, 404)
+    }
+    contextLine = `About the upcoming shift on ${entry.date} at ${entry.location_label}.`
   }
 
   const { error: insertError } = await adminClient.from('worker_notes').insert({
     user_id: callerProfile.id,
     business_id: callerProfile.business_id,
     shift_id: shift_id ?? null,
+    roster_entry_id: roster_entry_id ?? null,
     message: message.trim(),
   })
 
@@ -125,11 +155,13 @@ Deno.serve(async (req: Request) => {
 
       if (adminEmails.length > 0) {
         const link = `${site_url || ''}/admin/overview`
-        const subject = shiftClockIn
+        const subject = shift_id
           ? `${callerProfile.name} flagged a shift on Crewclock`
-          : `${callerProfile.name} sent a note on Crewclock`
-        const shiftLine = shiftClockIn
-          ? `<p style="margin:0 0 12px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:13px;color:#64748b;">About the shift starting ${new Date(shiftClockIn).toLocaleString('en-NZ', { timeZone: 'Pacific/Auckland', dateStyle: 'medium', timeStyle: 'short' })}.</p>`
+          : roster_entry_id
+            ? `${callerProfile.name} flagged an upcoming shift on Crewclock`
+            : `${callerProfile.name} sent a note on Crewclock`
+        const contextHtml = contextLine
+          ? `<p style="margin:0 0 12px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:13px;color:#64748b;">${contextLine}</p>`
           : ''
 
         await fetch('https://api.resend.com/emails', {
@@ -150,7 +182,7 @@ Deno.serve(async (req: Request) => {
                 <div style="max-width:480px;margin:0 auto;background-color:#ffffff;border:1px solid #e2e8f0;border-radius:16px;padding:28px;">
                   <p style="margin:0 0 16px 0;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:16px;font-weight:800;color:#0f172a;">Crewclock</p>
                   <h1 style="margin:0 0 8px 0;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:18px;font-weight:800;color:#0f172a;">${subject}</h1>
-                  ${shiftLine}
+                  ${contextHtml}
                   <p style="margin:0 0 20px 0;font-size:14px;line-height:1.6;color:#334155;white-space:pre-wrap;">"${message.trim()}"</p>
                   <a href="${link}" target="_blank" style="display:inline-block;padding:10px 20px;background-color:#0f172a;color:#ffffff;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:14px;font-weight:600;text-decoration:none;border-radius:8px;">View in Crewclock</a>
                   <p style="margin:20px 0 0 0;font-size:12px;color:#64748b;">You're receiving this because you're an admin on Crewclock.</p>

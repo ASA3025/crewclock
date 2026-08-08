@@ -63,13 +63,18 @@ create table public.worker_notes (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.users (id) on delete cascade,
   business_id uuid not null references public.businesses (id) on delete cascade,
-  -- Optional — a general note to the admin has no shift attached. Set
-  -- null (not cascade-deleted) if the shift is later removed, so the note
-  -- itself stays as a record even without the shift it was about.
+  -- A note can be about a past shift, an upcoming roster entry, or
+  -- neither (a general note) — never more than one. Both are set null
+  -- (not cascade-deleted) if the shift/entry is later removed, so the
+  -- note itself stays as a record even without what it was about.
   shift_id uuid references public.shifts (id) on delete set null,
+  roster_entry_id uuid references public.roster_entries (id) on delete set null,
   message text not null,
   resolved boolean not null default false,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  constraint worker_notes_at_most_one_target check (
+    shift_id is null or roster_entry_id is null
+  )
 );
 
 create index shifts_user_id_idx on public.shifts (user_id);

@@ -21,6 +21,7 @@ import type { AppUser, RosterEntry, ShiftWithWorker, WorkerNoteWithContext } fro
 
 type WorkerStatus =
   | { kind: 'stale_clocked_in'; since: string }
+  | { kind: 'no_show'; startTime: string }
   | { kind: 'clocked_in'; since: string }
   | { kind: 'clocked_out'; hoursToday: number }
   | { kind: 'late'; startTime: string }
@@ -28,11 +29,16 @@ type WorkerStatus =
 
 const statusOrder: Record<WorkerStatus['kind'], number> = {
   stale_clocked_in: 0,
-  clocked_in: 1,
-  late: 2,
-  not_clocked_in: 3,
-  clocked_out: 4,
+  no_show: 1,
+  clocked_in: 2,
+  late: 3,
+  not_clocked_in: 4,
+  clocked_out: 5,
 }
+
+// How long past a rostered start time before "running late" stops being
+// a reasonable read and it's more honest to call it a no-show.
+const NO_SHOW_THRESHOLD_MINUTES = 180
 
 export function AdminOverview() {
   const { appUser } = useAuth()
@@ -73,7 +79,7 @@ export function AdminOverview() {
         .eq('date', nzDateIso()),
       supabase
         .from('worker_notes')
-        .select('*, users(id, name), shifts(clock_in_time)')
+        .select('*, users(id, name), shifts(clock_in_time), roster_entries(date, location_label)')
         .eq('business_id', appUser.business_id)
         .eq('resolved', false)
         .order('created_at', { ascending: false }),
@@ -120,8 +126,14 @@ export function AdminOverview() {
         .map((r) => r.start_time as string)
         .sort()[0]
 
-      if (earliestStart && wallClockMinutes(earliestStart) < nzNowMinutes()) {
-        return { worker, status: { kind: 'late', startTime: earliestStart } as WorkerStatus }
+      if (earliestStart) {
+        const minutesLate = nzNowMinutes() - wallClockMinutes(earliestStart)
+        if (minutesLate > NO_SHOW_THRESHOLD_MINUTES) {
+          return { worker, status: { kind: 'no_show', startTime: earliestStart } as WorkerStatus }
+        }
+        if (minutesLate > 0) {
+          return { worker, status: { kind: 'late', startTime: earliestStart } as WorkerStatus }
+        }
       }
 
       return { worker, status: { kind: 'not_clocked_in' } as WorkerStatus }
@@ -132,11 +144,15 @@ export function AdminOverview() {
     (w) => w.status.kind === 'clocked_in' || w.status.kind === 'stale_clocked_in'
   ).length
   const clockedOutCount = workerStatuses.filter((w) => w.status.kind === 'clocked_out').length
-  // "Late" is still, factually, not clocked in yet — it gets its own pill
-  // in the list below, but counts here so the three tiles still add up to
-  // the full team.
+  // "Late"/"no-show" are still, factually, not clocked in yet — they get
+  // their own pills in the list below, but count here too so the three
+  // tiles still add up to the full team. lateCount/noShowCount break the
+  // total down further in the tile's caption, so the summary number
+  // doesn't look inconsistent with what the list below actually shows.
+  const lateCount = workerStatuses.filter((w) => w.status.kind === 'late').length
+  const noShowCount = workerStatuses.filter((w) => w.status.kind === 'no_show').length
   const notClockedInCount = workerStatuses.filter(
-    (w) => w.status.kind === 'not_clocked_in' || w.status.kind === 'late'
+    (w) => w.status.kind === 'not_clocked_in' || w.status.kind === 'late' || w.status.kind === 'no_show'
   ).length
   const hoursToday = todayShifts.reduce((sum, s) => sum + shiftHours(s), 0)
 
@@ -167,6 +183,16 @@ export function AdminOverview() {
               <HourglassMedium size={14} /> Not in yet
             </p>
             <p className="mt-1 font-heading text-2xl font-extrabold text-fg">{notClockedInCount}</p>
+            {(lateCount > 0 || noShowCount > 0) && (
+              <p className="mt-0.5 text-xs text-muted-fg">
+                {[
+                  lateCount > 0 && `${lateCount} running late`,
+                  noShowCount > 0 && `${noShowCount} no-show`,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </p>
+            )}
           </Card>
         </div>
         <p className="text-xs text-muted-fg">{formatHours(hoursToday)} logged across the team today</p>
@@ -180,13 +206,24 @@ export function AdminOverview() {
               {notes.map((n) => (
                 <Card key={n.id} className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-sm font-semibold text-fg">{n.users.name}</p>
-                    {n.shifts && (
-                      <p className="text-xs text-muted-fg">
-                        About the shift on{' '}
-                        {formatNzDate(n.shifts.clock_in_time, { day: 'numeric', month: 'short' })}
-                      </p>
-                    )}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-semibold text-fg">{n.users.name}</p>
+                      <StatusPill tone={n.shifts ? 'accent' : n.roster_entries ? 'warning' : 'muted'}>
+                        {n.shifts
+                          ? formatNzDate(n.shifts.clock_in_time, {
+                              weekday: 'short',
+                              day: 'numeric',
+                              month: 'short',
+                            })
+                          : n.roster_entries
+                            ? `Upcoming: ${formatNzDate(n.roster_entries.date, {
+                                weekday: 'short',
+                                day: 'numeric',
+                                month: 'short',
+                              })} · ${n.roster_entries.location_label}`
+                            : 'General note'}
+                      </StatusPill>
+                    </div>
                     <p className="mt-1 text-sm text-fg">{n.message}</p>
                   </div>
                   <Button
@@ -231,6 +268,15 @@ export function AdminOverview() {
                     <span className="text-xs text-muted-fg">Since {formatNzTime(status.since)}</span>
                     <StatusPill tone="destructive" icon={<Warning size={13} weight="fill" />}>
                       Forgot to clock out?
+                    </StatusPill>
+                  </div>
+                )}
+
+                {status.kind === 'no_show' && (
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-muted-fg">Due {formatWallClockTime(status.startTime)}</span>
+                    <StatusPill tone="destructive" icon={<Warning size={13} weight="fill" />}>
+                      No-show today
                     </StatusPill>
                   </div>
                 )}

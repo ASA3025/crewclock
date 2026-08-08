@@ -57,6 +57,7 @@ export interface WorkerNote {
   user_id: string
   business_id: string
   shift_id: string | null
+  roster_entry_id: string | null
   message: string
   resolved: boolean
   created_at: string
@@ -65,4 +66,5 @@ export interface WorkerNote {
 export interface WorkerNoteWithContext extends WorkerNote {
   users: Pick<AppUser, 'id' | 'name'>
   shifts: Pick<Shift, 'clock_in_time'> | null
+  roster_entries: Pick<RosterEntry, 'date' | 'location_label'> | null
 }

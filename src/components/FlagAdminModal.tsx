@@ -8,12 +8,16 @@ export function FlagAdminModal({
   onClose,
   shiftId,
   shiftLabel,
+  rosterEntryId,
+  rosterLabel,
   onSent,
 }: {
   open: boolean
   onClose: () => void
   shiftId?: string
   shiftLabel?: string
+  rosterEntryId?: string
+  rosterLabel?: string
   onSent?: () => void
 }) {
   const [message, setMessage] = useState('')
@@ -30,6 +34,7 @@ export function FlagAdminModal({
       body: {
         message: message.trim(),
         shift_id: shiftId ?? null,
+        roster_entry_id: rosterEntryId ?? null,
         site_url: window.location.origin,
       },
     })
@@ -53,7 +58,11 @@ export function FlagAdminModal({
   }
 
   return (
-    <Modal open={open} onClose={handleClose} title={shiftId ? 'Flag this shift' : 'Message your admin'}>
+    <Modal
+      open={open}
+      onClose={handleClose}
+      title={shiftId ? 'Flag this shift' : rosterEntryId ? 'Flag this roster entry' : 'Message your admin'}
+    >
       {sent ? (
         <div className="flex flex-col gap-4">
           <p className="text-sm text-fg">Sent to your admin.</p>
@@ -64,6 +73,7 @@ export function FlagAdminModal({
       ) : (
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           {shiftLabel && <p className="text-sm text-muted-fg">About your shift on {shiftLabel}.</p>}
+          {rosterLabel && <p className="text-sm text-muted-fg">About your upcoming shift on {rosterLabel}.</p>}
           <div className="flex flex-col gap-1.5">
             <label htmlFor="flag-message" className="text-sm font-medium text-fg">
               What's up?
