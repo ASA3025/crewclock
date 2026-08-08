@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabaseClient'
 import { PageHeader } from '../../components/PageHeader'
 import { Card } from '../../components/Card'
 import { StatusPill } from '../../components/StatusPill'
-import { formatHours, shiftHours } from '../../utils/pay'
+import { formatHours, isStaleOpenShift, shiftHours } from '../../utils/pay'
 import {
   formatNzTime,
   formatWallClockTime,
@@ -18,16 +18,18 @@ import {
 import type { AppUser, RosterEntry, ShiftWithWorker } from '../../types'
 
 type WorkerStatus =
+  | { kind: 'stale_clocked_in'; since: string }
   | { kind: 'clocked_in'; since: string }
   | { kind: 'clocked_out'; hoursToday: number }
   | { kind: 'late'; startTime: string }
   | { kind: 'not_clocked_in' }
 
 const statusOrder: Record<WorkerStatus['kind'], number> = {
-  clocked_in: 0,
-  late: 1,
-  not_clocked_in: 2,
-  clocked_out: 3,
+  stale_clocked_in: 0,
+  clocked_in: 1,
+  late: 2,
+  not_clocked_in: 3,
+  clocked_out: 4,
 }
 
 export function AdminOverview() {
@@ -85,7 +87,8 @@ export function AdminOverview() {
     .map((worker) => {
       const openShift = clockedIn.find((s) => s.user_id === worker.id)
       if (openShift) {
-        return { worker, status: { kind: 'clocked_in', since: openShift.clock_in_time } as WorkerStatus }
+        const kind = isStaleOpenShift(openShift) ? 'stale_clocked_in' : 'clocked_in'
+        return { worker, status: { kind, since: openShift.clock_in_time } as WorkerStatus }
       }
 
       const completedToday = todayShifts.filter((s) => s.user_id === worker.id && s.clock_out_time)
@@ -110,7 +113,9 @@ export function AdminOverview() {
     })
     .sort((a, b) => statusOrder[a.status.kind] - statusOrder[b.status.kind])
 
-  const clockedInCount = workerStatuses.filter((w) => w.status.kind === 'clocked_in').length
+  const clockedInCount = workerStatuses.filter(
+    (w) => w.status.kind === 'clocked_in' || w.status.kind === 'stale_clocked_in'
+  ).length
   const clockedOutCount = workerStatuses.filter((w) => w.status.kind === 'clocked_out').length
   // "Late" is still, factually, not clocked in yet — it gets its own pill
   // in the list below, but counts here so the three tiles still add up to
@@ -173,6 +178,15 @@ export function AdminOverview() {
             {filteredStatuses.map(({ worker, status }) => (
               <Card key={worker.id} className="flex items-center justify-between">
                 <p className="text-sm font-semibold text-fg">{worker.name}</p>
+
+                {status.kind === 'stale_clocked_in' && (
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-muted-fg">Since {formatNzTime(status.since)}</span>
+                    <StatusPill tone="destructive" icon={<Warning size={13} weight="fill" />}>
+                      Forgot to clock out?
+                    </StatusPill>
+                  </div>
+                )}
 
                 {status.kind === 'clocked_in' && (
                   <div className="flex items-center gap-3">

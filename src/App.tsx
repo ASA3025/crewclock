@@ -5,6 +5,8 @@ import { ProtectedRoute } from './routes/ProtectedRoute'
 import { WorkerLayout } from './components/WorkerLayout'
 import { AdminLayout } from './components/AdminLayout'
 import { Landing } from './pages/Landing'
+import { Privacy } from './pages/Privacy'
+import { Terms } from './pages/Terms'
 import { AcceptInvite } from './pages/AcceptInvite'
 import { isAuthRedirectUrl, isPendingPasswordSetup, markPendingPasswordSetup } from './lib/authRedirect'
 import { WorkerHome } from './pages/worker/Home'
@@ -39,6 +41,8 @@ function App() {
       <AuthProvider>
         <Routes>
           <Route path="/" element={<RootRoute />} />
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/terms" element={<Terms />} />
 
           <Route element={<ProtectedRoute role="worker" />}>
             <Route element={<WorkerLayout />}>

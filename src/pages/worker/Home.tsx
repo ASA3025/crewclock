@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Clock, MapPin, NavigationArrow, Camera } from '@phosphor-icons/react'
+import { Clock, MapPin, NavigationArrow, Camera, Warning } from '@phosphor-icons/react'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabaseClient'
 import { Button } from '../../components/Button'
 import { Card } from '../../components/Card'
 import { StatusPill } from '../../components/StatusPill'
-import { estimateGross, formatCurrency, formatHours, shiftHours } from '../../utils/pay'
+import { estimateGross, formatCurrency, formatHours, isStaleOpenShift, shiftHours } from '../../utils/pay'
 import {
   formatNzDate,
   formatNzTime,
@@ -13,6 +13,7 @@ import {
   nzDateIso,
   nzStartOfDayInstant,
 } from '../../utils/datetime'
+import { isNzPublicHoliday } from '../../utils/nzPublicHolidays'
 import type { RosterEntry, Shift } from '../../types'
 
 function elapsedHours(startIso: string): number {
@@ -177,6 +178,12 @@ export function WorkerHome() {
         <p className="mt-2 font-heading text-3xl font-extrabold">{formatCurrency(liveGross)}</p>
         <p className="mt-1 text-xs uppercase tracking-wide text-navy-fg/70">Estimate — before tax</p>
         <p className="mt-2 text-xs text-navy-fg/70">{formatHours(liveHours)} logged</p>
+        {isNzPublicHoliday(new Date()) && (
+          <p className="mt-2 flex items-center gap-1 text-xs text-navy-fg/90">
+            <Warning size={13} weight="fill" className="text-warning" /> Public holiday today —
+            this estimate may differ from actual pay.
+          </p>
+        )}
       </Card>
 
       <Card className="flex flex-col items-center gap-4 py-8 text-center">
@@ -191,6 +198,12 @@ export function WorkerHome() {
             <p className="text-xs text-muted-fg">
               Since {formatNzTime(openShift.clock_in_time)}
             </p>
+            {isStaleOpenShift(openShift) && (
+              <p className="flex items-center gap-1 text-xs text-destructive">
+                <Warning size={13} weight="fill" /> Still clocked in from a while ago — did you
+                forget to clock out?
+              </p>
+            )}
           </>
         ) : (
           <>

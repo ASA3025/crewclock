@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ChatText, Check, MapPin, PencilSimple, Trash, X } from '@phosphor-icons/react'
+import { ChatText, Check, MapPin, PencilSimple, Trash, Warning, X } from '@phosphor-icons/react'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabaseClient'
 import { PageHeader } from '../../components/PageHeader'
@@ -7,7 +7,7 @@ import { Card } from '../../components/Card'
 import { Button } from '../../components/Button'
 import { Modal } from '../../components/Modal'
 import { StatusPill } from '../../components/StatusPill'
-import { estimateGross, formatCurrency, formatHours, shiftHours } from '../../utils/pay'
+import { estimateGross, formatCurrency, formatHours, isStaleOpenShift, shiftHours } from '../../utils/pay'
 import {
   formatNzDate,
   formatNzTime,
@@ -18,6 +18,7 @@ import {
   nzStartOfDayInstant,
   nzStartOfMonthIso,
 } from '../../utils/datetime'
+import { isNzPublicHoliday } from '../../utils/nzPublicHolidays'
 import type { AppUser, ShiftWithWorker } from '../../types'
 
 export function AdminHours() {
@@ -273,7 +274,15 @@ export function AdminHours() {
                     <>
                       <td className="px-4 py-3 text-muted-fg">{formatNzTime(shift.clock_in_time)}</td>
                       <td className="px-4 py-3 text-muted-fg">
-                        {shift.clock_out_time ? formatNzTime(shift.clock_out_time) : '—'}
+                        {shift.clock_out_time ? (
+                          formatNzTime(shift.clock_out_time)
+                        ) : isStaleOpenShift(shift) ? (
+                          <span className="flex items-center gap-1 text-destructive">
+                            <Warning size={13} weight="fill" /> Still open
+                          </span>
+                        ) : (
+                          '—'
+                        )}
                       </td>
                     </>
                   )}
@@ -330,7 +339,15 @@ export function AdminHours() {
                     )}
                   </td>
                   <td className="px-4 py-3 text-muted-fg">
-                    {formatCurrency(estimateGross(shiftHours(shift), shift.users.hourly_rate))}
+                    <p>{formatCurrency(estimateGross(shiftHours(shift), shift.users.hourly_rate))}</p>
+                    {isNzPublicHoliday(shift.clock_in_time) && (
+                      <p
+                        className="mt-0.5 flex items-center gap-1 text-xs text-warning"
+                        title="This shift falls on a public holiday — actual pay may differ from this estimate."
+                      >
+                        <Warning size={11} weight="fill" /> Public holiday
+                      </p>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <StatusPill

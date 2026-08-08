@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { MapPin, CheckCircle, HourglassMedium, XCircle } from '@phosphor-icons/react'
+import { MapPin, CheckCircle, HourglassMedium, Warning, XCircle } from '@phosphor-icons/react'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabaseClient'
 import { PageHeader } from '../../components/PageHeader'
@@ -7,6 +7,7 @@ import { Card } from '../../components/Card'
 import { StatusPill } from '../../components/StatusPill'
 import { estimateGross, formatCurrency, formatHours, shiftHours } from '../../utils/pay'
 import { formatNzDate, formatNzTime, nzDateIso, nzStartOfWeekIso } from '../../utils/datetime'
+import { isNzPublicHoliday } from '../../utils/nzPublicHolidays'
 import type { Shift } from '../../types'
 
 type Range = 'week' | 'month' | 'all'
@@ -119,6 +120,12 @@ export function WorkerHoursHistory() {
             {shift.gps_lat != null && (
               <p className="flex items-center gap-1 text-xs text-muted-fg">
                 <MapPin size={13} /> Location captured
+              </p>
+            )}
+            {isNzPublicHoliday(shift.clock_in_time) && (
+              <p className="flex items-center gap-1 text-xs text-warning">
+                <Warning size={13} weight="fill" /> Public holiday — pay may differ from this
+                estimate
               </p>
             )}
             {shift.note && <p className="text-sm text-fg">{shift.note}</p>}
