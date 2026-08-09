@@ -12,9 +12,9 @@ export function Footer() {
         </Link>
       </div>
       <p>
-        © {new Date().getFullYear()} Crewclock ·{' '}
-        <a href="mailto:arundeepatkar2008@gmail.com" className="hover:text-fg hover:underline">
-          arundeepatkar2008@gmail.com
+        © Crewclock ·{' '}
+        <a href="mailto:crewclocknz@gmail.com" className="hover:text-fg hover:underline">
+          crewclocknz@gmail.com
         </a>
       </p>
     </footer>
