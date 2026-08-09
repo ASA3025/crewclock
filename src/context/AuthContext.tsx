@@ -36,17 +36,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let active = true
-
-    supabase.auth.getSession().then(async ({ data }) => {
-      if (!active) return
-      setSession(data.session)
-      if (data.session) {
-        setAppUser(await fetchAppUser(data.session.user.id))
-      }
-      setLoading(false)
-    })
+    // onAuthStateChange fires its own 'INITIAL_SESSION' event on
+    // subscribe — using it as the *only* source of truth (instead of also
+    // calling getSession() separately, as this used to) avoids two
+    // independent fetchAppUser() calls racing on every mount. That race
+    // was a real bug, not just a mobile quirk: whichever of the two HTTP
+    // requests happened to resolve last won unconditionally, so a stale
+    // or transiently-failed one could clobber a fresh, correct one and
+    // leave appUser null despite session being perfectly valid — which
+    // ProtectedRoute then reads as logged-out. eventId guards the same
+    // failure mode for any two auth events firing in quick succession
+    // (e.g. INITIAL_SESSION immediately followed by TOKEN_REFRESHED): a
+    // slower, older event's fetchAppUser result is discarded if a newer
+    // event has since started.
+    let latestEventId = 0
 
     const { data: listener } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+      if (!active) return
+
       // Fires when a password recovery link is opened — the session it
       // creates is fully valid immediately, before a new password has
       // actually been set. This flag is what stops that session from
@@ -57,12 +64,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         markPendingPasswordSetup()
       }
 
+      const eventId = ++latestEventId
       setSession(newSession)
-      if (newSession) {
-        setAppUser(await fetchAppUser(newSession.user.id))
-      } else {
-        setAppUser(null)
-      }
+
+      const profile = newSession ? await fetchAppUser(newSession.user.id) : null
+      if (!active || eventId !== latestEventId) return
+
+      setAppUser(profile)
+      setLoading(false)
     })
 
     return () => {

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { AuthProvider } from './context/AuthContext'
+import { AuthProvider, useAuth } from './context/AuthContext'
 import { ProtectedRoute } from './routes/ProtectedRoute'
 import { WorkerLayout } from './components/WorkerLayout'
 import { AdminLayout } from './components/AdminLayout'
@@ -34,7 +34,28 @@ function RootRoute() {
     }
     return isPendingPasswordSetup()
   })
-  return isAuthRedirect ? <AcceptInvite /> : <Landing />
+  const { session, appUser, loading } = useAuth()
+
+  if (isAuthRedirect) return <AcceptInvite />
+
+  // A normal (non-recovery) session that's already valid should never be
+  // stranded here — without this, any transient moment where a protected
+  // route bounced to "/" (a slow network on wake, a momentary auth-state
+  // hiccup — see AuthContext) left the user looking permanently logged
+  // out even once the real session resolved fine, since nothing ever
+  // sent them back to where they belonged.
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-bg">
+        <p className="font-body text-sm text-muted-fg">Loading…</p>
+      </div>
+    )
+  }
+  if (session && appUser) {
+    return <Navigate to={appUser.role === 'admin' ? '/admin/overview' : '/worker/home'} replace />
+  }
+
+  return <Landing />
 }
 
 function App() {
