@@ -30,8 +30,13 @@ function json(body: unknown, status: number) {
   })
 }
 
+// Anchored to UTC midnight, not noon — NZ is always *ahead* of UTC
+// (+12/+13), so anchoring at noon UTC and adding that offset always
+// crosses into the next calendar day once formatted in NZ time. Midnight
+// UTC plus up to 13 hours never leaves the same NZ calendar day, matching
+// the same approach as formatNzDate in the frontend (src/utils/datetime.ts).
 function formatDateLabel(ymd: string): string {
-  return new Date(`${ymd}T12:00:00Z`).toLocaleDateString('en-NZ', {
+  return new Date(`${ymd}T00:00:00Z`).toLocaleDateString('en-NZ', {
     timeZone: 'Pacific/Auckland',
     weekday: 'short',
     day: 'numeric',

@@ -13,6 +13,7 @@ export function AdminLeave() {
   const [requests, setRequests] = useState<LeaveRequestWithWorker[]>([])
   const [loading, setLoading] = useState(true)
   const [status, setStatus] = useState<LeaveStatus | 'all'>('pending')
+  const [search, setSearch] = useState('')
   const [decidingId, setDecidingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -20,15 +21,20 @@ export function AdminLeave() {
     if (!appUser) return
     setLoading(true)
 
+    // leave_requests has two foreign keys into users (user_id — the
+    // requester, and decided_by — the admin who decided) so a plain
+    // `users(id, name)` embed is ambiguous to PostgREST and errors rather
+    // than picking one. `users!user_id(...)` pins it to the requester.
     let query = supabase
       .from('leave_requests')
-      .select('*, users(id, name)')
+      .select('*, users!user_id(id, name)')
       .eq('business_id', appUser.business_id)
 
     if (status !== 'all') query = query.eq('status', status)
     query = query.order('start_date', { ascending: true })
 
-    const { data } = await query
+    const { data, error: queryError } = await query
+    if (queryError) console.error('Failed to load leave requests:', queryError.message)
     setRequests((data as LeaveRequestWithWorker[]) ?? [])
     setLoading(false)
   }, [appUser, status])
@@ -58,6 +64,10 @@ export function AdminLeave() {
     load()
   }
 
+  const filteredRequests = requests.filter((r) =>
+    r.users.name.toLowerCase().includes(search.trim().toLowerCase())
+  )
+
   return (
     <div>
       <PageHeader title="Leave" subtitle="Review and decide time-off requests" />
@@ -77,6 +87,16 @@ export function AdminLeave() {
               <option value="all">All</option>
             </select>
           </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-muted-fg">Worker</label>
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search workers…"
+              className="h-10 rounded-lg border border-border px-3 text-sm outline-none focus:border-accent"
+            />
+          </div>
         </Card>
 
         {error && (
@@ -87,10 +107,10 @@ export function AdminLeave() {
 
         <div className="flex flex-col gap-2">
           {loading && <p className="text-sm text-muted-fg">Loading…</p>}
-          {!loading && requests.length === 0 && (
+          {!loading && filteredRequests.length === 0 && (
             <p className="text-sm text-muted-fg">No leave requests match this filter.</p>
           )}
-          {requests.map((r) => (
+          {filteredRequests.map((r) => (
             <Card key={r.id} className="flex items-start justify-between gap-3">
               <div>
                 <div className="flex flex-wrap items-center gap-2">
