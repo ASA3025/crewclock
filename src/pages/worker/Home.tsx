@@ -43,6 +43,28 @@ const WEATHER_ICONS: Record<WeatherKind, typeof Sun> = {
   storm: CloudLightning,
 }
 
+// Each of these is a genuinely different failure with a different fix —
+// collapsing them into one generic "unavailable" (as an earlier version
+// did) made a real mobile-only bug undiagnosable from the outside.
+type WeatherStatus =
+  | 'locating'
+  | 'ok'
+  | 'insecure_context'
+  | 'geolocation_unsupported'
+  | 'permission_denied'
+  | 'position_unavailable'
+  | 'timeout'
+  | 'fetch_failed'
+
+const WEATHER_ERROR_MESSAGES: Partial<Record<WeatherStatus, string>> = {
+  insecure_context: 'Weather unavailable — this page needs HTTPS for location access',
+  geolocation_unsupported: "Weather unavailable — this browser doesn't support location",
+  permission_denied: 'Weather unavailable — location permission blocked for this site',
+  position_unavailable: 'Weather unavailable — location unavailable on this device',
+  timeout: 'Weather unavailable — location request timed out',
+  fetch_failed: "Weather unavailable — couldn't reach the weather service",
+}
+
 function elapsedHours(startIso: string): number {
   return Math.max((Date.now() - new Date(startIso).getTime()) / 1000 / 60 / 60, 0)
 }
@@ -69,7 +91,7 @@ export function WorkerHome() {
   const [todayRosterFlagged, setTodayRosterFlagged] = useState(false)
   const [flagRosterOpen, setFlagRosterOpen] = useState(false)
   const [weather, setWeather] = useState<CurrentWeather | null>(null)
-  const [weatherStatus, setWeatherStatus] = useState<'locating' | 'ok' | 'unavailable'>('locating')
+  const [weatherStatus, setWeatherStatus] = useState<WeatherStatus>('locating')
 
   useEffect(() => {
     if (!appUser) return
@@ -125,28 +147,52 @@ export function WorkerHome() {
     return () => clearInterval(id)
   }, [openShift])
 
-  // Best-effort, but never silently so — if location is denied or the
-  // lookup fails, that's shown as a short explanation rather than leaving
-  // the whole feature looking like it was never built (see the earlier
-  // bug where exactly that happened and was indistinguishable from a
-  // missing feature).
+  // Best-effort, but never silently so — every failure path sets a
+  // specific status and logs the raw error, rather than collapsing
+  // everything into one generic "unavailable" that's indistinguishable
+  // from the feature simply never having been built (see the earlier bug
+  // where exactly that happened on mobile with zero visible cause).
   useEffect(() => {
-    if (!navigator.geolocation) {
-      setWeatherStatus('unavailable')
+    // Chrome and Safari both refuse navigator.geolocation on any origin
+    // that isn't HTTPS or localhost — a device's own "Allow location"
+    // site permission doesn't override this. Testing on a phone via the
+    // LAN address from `npm run dev` (see SETUP.md) is exactly this case:
+    // it works from a laptop hitting localhost, and silently can't work
+    // from a phone hitting a plain http:// LAN IP, regardless of what the
+    // phone's site permission says.
+    if (!window.isSecureContext) {
+      console.warn(
+        '[weather] Not a secure context (needs HTTPS or localhost) — the browser blocks geolocation regardless of site permission. Current origin:',
+        window.location.origin
+      )
+      setWeatherStatus('insecure_context')
       return
     }
+
+    if (!navigator.geolocation) {
+      console.warn('[weather] navigator.geolocation is not available in this browser.')
+      setWeatherStatus('geolocation_unsupported')
+      return
+    }
+
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         fetchCurrentWeather(pos.coords.latitude, pos.coords.longitude).then((result) => {
-          if (result) {
-            setWeather(result)
+          if (result.ok) {
+            setWeather(result.data)
             setWeatherStatus('ok')
           } else {
-            setWeatherStatus('unavailable')
+            console.warn(`[weather] Open-Meteo lookup failed (${result.reason}): ${result.detail}`)
+            setWeatherStatus('fetch_failed')
           }
         })
       },
-      () => setWeatherStatus('unavailable'),
+      (err) => {
+        console.warn(`[weather] Geolocation error ${err.code} (${err.message})`)
+        if (err.code === err.PERMISSION_DENIED) setWeatherStatus('permission_denied')
+        else if (err.code === err.TIMEOUT) setWeatherStatus('timeout')
+        else setWeatherStatus('position_unavailable')
+      },
       { enableHighAccuracy: false, timeout: 8000, maximumAge: 10 * 60 * 1000 }
     )
   }, [])
@@ -251,8 +297,8 @@ export function WorkerHome() {
                 </p>
               )
             })()}
-          {weatherStatus === 'unavailable' && (
-            <p className="text-xs text-muted-fg">Weather unavailable — check location access</p>
+          {WEATHER_ERROR_MESSAGES[weatherStatus] && (
+            <p className="text-xs text-muted-fg">{WEATHER_ERROR_MESSAGES[weatherStatus]}</p>
           )}
         </div>
         <h1 className="font-heading text-2xl font-bold text-fg">

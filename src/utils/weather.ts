@@ -6,17 +6,43 @@ export interface CurrentWeather {
   code: number
 }
 
-export async function fetchCurrentWeather(lat: number, lng: number): Promise<CurrentWeather | null> {
+// A plain `| null` return here previously made every possible failure —
+// a dropped connection, a 5xx from Open-Meteo, a malformed response body
+// — look identical from the caller's side, which made a real production
+// issue (weather silently missing on mobile) impossible to diagnose
+// without re-deriving it from scratch. Each reason is distinct so the
+// caller can show and log something specific instead of just "unavailable".
+export type WeatherFetchResult =
+  | { ok: true; data: CurrentWeather }
+  | { ok: false; reason: 'network' | 'http_error' | 'bad_data'; detail: string }
+
+export async function fetchCurrentWeather(lat: number, lng: number): Promise<WeatherFetchResult> {
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,weather_code&timezone=Pacific%2FAuckland`
+
+  let res: Response
   try {
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,weather_code&timezone=Pacific%2FAuckland`
-    const res = await fetch(url)
-    if (!res.ok) return null
-    const data = await res.json()
-    if (typeof data?.current?.temperature_2m !== 'number') return null
-    return { temperatureC: data.current.temperature_2m, code: data.current.weather_code }
-  } catch {
-    return null
+    res = await fetch(url)
+  } catch (err) {
+    return { ok: false, reason: 'network', detail: err instanceof Error ? err.message : String(err) }
   }
+
+  if (!res.ok) {
+    return { ok: false, reason: 'http_error', detail: `HTTP ${res.status}` }
+  }
+
+  let data: unknown
+  try {
+    data = await res.json()
+  } catch {
+    return { ok: false, reason: 'bad_data', detail: 'Response body was not valid JSON' }
+  }
+
+  const current = (data as { current?: { temperature_2m?: unknown; weather_code?: unknown } })?.current
+  if (typeof current?.temperature_2m !== 'number' || typeof current?.weather_code !== 'number') {
+    return { ok: false, reason: 'bad_data', detail: `Unexpected response shape: ${JSON.stringify(data)}` }
+  }
+
+  return { ok: true, data: { temperatureC: current.temperature_2m, code: current.weather_code } }
 }
 
 export type WeatherKind = 'sun' | 'cloud-sun' | 'cloud' | 'fog' | 'rain' | 'snow' | 'storm'
