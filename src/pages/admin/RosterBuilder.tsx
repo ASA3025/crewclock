@@ -6,6 +6,7 @@ import { PageHeader } from '../../components/PageHeader'
 import { Card } from '../../components/Card'
 import { Button } from '../../components/Button'
 import { formatNzDate, formatShiftTimeRange, nzDateIso } from '../../utils/datetime'
+import { isNzPublicHoliday } from '../../utils/nzPublicHolidays'
 import type { AppUser, LeaveRequest, RosterEntryWithWorker } from '../../types'
 
 function startOfWeek(d: Date) {
@@ -149,6 +150,14 @@ export function AdminRosterBuilder() {
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-fg">
                 {formatNzDate(day, { weekday: 'short', day: 'numeric' })}
               </p>
+              {isNzPublicHoliday(dayIso) && (
+                <p
+                  className="-mt-1 flex items-center gap-1 text-[11px] text-warning"
+                  title="This day is an NZ public holiday — pay may differ from the standard estimate."
+                >
+                  <Warning size={11} weight="fill" /> Public holiday
+                </p>
+              )}
 
               {dayEntries.map((entry) => (
                 <div

@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Clock, Flag, MapPin } from '@phosphor-icons/react'
+import { Clock, Flag, MapPin, Warning } from '@phosphor-icons/react'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabaseClient'
 import { PageHeader } from '../../components/PageHeader'
 import { Card } from '../../components/Card'
 import { FlagAdminModal } from '../../components/FlagAdminModal'
 import { formatNzDate, formatShiftTimeRange, nzDateIso } from '../../utils/datetime'
+import { isNzPublicHoliday } from '../../utils/nzPublicHolidays'
 import type { RosterEntry } from '../../types'
 
 export function WorkerRoster() {
@@ -64,6 +65,14 @@ export function WorkerRoster() {
                   month: 'short',
                 })}
               </p>
+              {isNzPublicHoliday(entry.date) && (
+                <p
+                  className="mt-0.5 flex items-center gap-1 text-xs text-warning"
+                  title="This day is an NZ public holiday — pay may differ from the standard estimate."
+                >
+                  <Warning size={12} weight="fill" /> Public holiday
+                </p>
+              )}
               <p className="mt-1 flex items-center gap-1 text-sm text-muted-fg">
                 <MapPin size={14} /> {entry.location_label}
               </p>
