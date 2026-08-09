@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { CaretRight, CheckCircle, Clock, Flag, HourglassMedium, Warning } from '@phosphor-icons/react'
+import {
+  Airplane,
+  CaretRight,
+  CheckCircle,
+  Clock,
+  Flag,
+  HourglassMedium,
+  Warning,
+} from '@phosphor-icons/react'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabaseClient'
 import { PageHeader } from '../../components/PageHeader'
@@ -47,13 +55,16 @@ export function AdminOverview() {
   const [todayShifts, setTodayShifts] = useState<ShiftWithWorker[]>([])
   const [todayRoster, setTodayRoster] = useState<Pick<RosterEntry, 'user_id' | 'start_time'>[]>([])
   const [openFlagsCount, setOpenFlagsCount] = useState(0)
+  const [pendingLeaveCount, setPendingLeaveCount] = useState(0)
+  const [upcomingLeaveCount, setUpcomingLeaveCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
 
   const load = useCallback(async () => {
     if (!appUser) return
 
-    const [workersRes, clockedInRes, todayRes, rosterRes, openFlagsRes] = await Promise.all([
+    const [workersRes, clockedInRes, todayRes, rosterRes, openFlagsRes, pendingLeaveRes, upcomingLeaveRes] =
+      await Promise.all([
       supabase
         .from('users')
         .select('*')
@@ -85,6 +96,20 @@ export function AdminOverview() {
         .select('id', { count: 'exact', head: true })
         .eq('business_id', appUser.business_id)
         .eq('resolved', false),
+      supabase
+        .from('leave_requests')
+        .select('id', { count: 'exact', head: true })
+        .eq('business_id', appUser.business_id)
+        .eq('status', 'pending'),
+      // Approved leave that's still current or upcoming (not yet fully in
+      // the past) — separate from pendingLeaveCount above since one needs
+      // a decision and the other is just useful context for who's away.
+      supabase
+        .from('leave_requests')
+        .select('id', { count: 'exact', head: true })
+        .eq('business_id', appUser.business_id)
+        .eq('status', 'approved')
+        .gte('end_date', nzDateIso()),
     ])
 
     setWorkers((workersRes.data as AppUser[]) ?? [])
@@ -92,6 +117,8 @@ export function AdminOverview() {
     setTodayShifts((todayRes.data as ShiftWithWorker[]) ?? [])
     setTodayRoster((rosterRes.data as Pick<RosterEntry, 'user_id' | 'start_time'>[]) ?? [])
     setOpenFlagsCount(openFlagsRes.count ?? 0)
+    setPendingLeaveCount(pendingLeaveRes.count ?? 0)
+    setUpcomingLeaveCount(upcomingLeaveRes.count ?? 0)
     setLoading(false)
   }, [appUser])
 
@@ -194,22 +221,48 @@ export function AdminOverview() {
         </div>
         <p className="text-xs text-muted-fg">{formatHours(hoursToday)} logged across the team today</p>
 
-        <Link
-          to="/admin/flags"
-          className="flex max-w-lg items-center justify-between gap-3 rounded-xl border border-border bg-white p-4 shadow-sm transition-colors duration-150 hover:border-accent"
-        >
-          <span className="flex items-center gap-2 text-sm font-semibold text-fg">
-            <Flag
-              size={16}
-              weight={openFlagsCount > 0 ? 'fill' : 'regular'}
-              className={openFlagsCount > 0 ? 'text-destructive' : 'text-muted-fg'}
-            />
-            {openFlagsCount > 0
-              ? `${openFlagsCount} open flag${openFlagsCount === 1 ? '' : 's'}`
-              : 'No open flags'}
-          </span>
-          <CaretRight size={16} className="text-muted-fg" />
-        </Link>
+        <div className="flex max-w-lg flex-col gap-2 sm:flex-row">
+          <Link
+            to="/admin/flags"
+            className="flex flex-1 items-center justify-between gap-3 rounded-xl border border-border bg-white p-4 shadow-sm transition-colors duration-150 hover:border-accent"
+          >
+            <span className="flex items-center gap-2 text-sm font-semibold text-fg">
+              <Flag
+                size={16}
+                weight={openFlagsCount > 0 ? 'fill' : 'regular'}
+                className={openFlagsCount > 0 ? 'text-destructive' : 'text-muted-fg'}
+              />
+              {openFlagsCount > 0
+                ? `${openFlagsCount} open flag${openFlagsCount === 1 ? '' : 's'}`
+                : 'No open flags'}
+            </span>
+            <CaretRight size={16} className="text-muted-fg" />
+          </Link>
+
+          <Link
+            to="/admin/leave"
+            className="flex flex-1 flex-col gap-0.5 rounded-xl border border-border bg-white p-4 shadow-sm transition-colors duration-150 hover:border-accent"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <span className="flex items-center gap-2 text-sm font-semibold text-fg">
+                <Airplane
+                  size={16}
+                  weight={pendingLeaveCount > 0 ? 'fill' : 'regular'}
+                  className={pendingLeaveCount > 0 ? 'text-warning' : 'text-muted-fg'}
+                />
+                {pendingLeaveCount > 0
+                  ? `${pendingLeaveCount} pending leave request${pendingLeaveCount === 1 ? '' : 's'}`
+                  : 'No pending leave requests'}
+              </span>
+              <CaretRight size={16} className="text-muted-fg" />
+            </div>
+            {upcomingLeaveCount > 0 && (
+              <p className="text-xs text-muted-fg">
+                {upcomingLeaveCount} approved leave request{upcomingLeaveCount === 1 ? '' : 's'} upcoming
+              </p>
+            )}
+          </Link>
+        </div>
 
         <div>
           <div className="mb-3 flex items-center justify-between gap-3">

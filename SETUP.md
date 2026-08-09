@@ -37,9 +37,11 @@ fallbacks for when an invite email doesn't reach a worker, `reverse-geocode`
 turns a shift's GPS coordinates into a readable address on the admin Hours
 page, `submit-worker-note` handles a worker flagging a shift/roster entry or
 sending a note to their admin, `submit-note-reply` handles either side
-replying within that flag's thread, and `weekly-summary-email` sends admins
+replying within that flag's thread, `weekly-summary-email` sends admins
 a Monday-morning digest (see [Weekly summary email](#weekly-summary-email-optional)
-below for the extra setup it needs). All eight need the
+below for the extra setup it needs), `submit-leave-request` handles a
+worker requesting time off, and `decide-leave-request` handles an admin
+approving or denying it. All ten need the
 [Supabase CLI](https://supabase.com/docs/guides/cli):
 
 ```bash
@@ -54,6 +56,8 @@ supabase functions deploy reverse-geocode
 supabase functions deploy submit-worker-note
 supabase functions deploy submit-note-reply
 supabase functions deploy weekly-summary-email --no-verify-jwt
+supabase functions deploy submit-leave-request
+supabase functions deploy decide-leave-request
 ```
 
 `weekly-summary-email` is deployed with `--no-verify-jwt` because it's
@@ -66,30 +70,33 @@ URL and keys into every Edge Function automatically, and `reverse-geocode`
 calls OpenStreetMap's free Nominatim API, which needs no API key or account
 of its own either.
 
-`submit-worker-note`, `submit-note-reply`, and `weekly-summary-email` are
-the exception: sending any of these emails needs a
+`submit-worker-note`, `submit-note-reply`, `weekly-summary-email`,
+`submit-leave-request`, and `decide-leave-request` are the exception:
+sending any of these emails needs a
 [Resend](https://resend.com) account and API key —
 
 ```bash
 supabase secrets set RESEND_API_KEY=your-resend-api-key
 ```
 
-Without this secret set, flagging, replying, and the weekly summary job
-still work either way for `submit-worker-note`/`submit-note-reply` — the
-note/reply itself is saved regardless, only the email notification is
-skipped (`weekly-summary-email` is the one exception: it has nothing to do
-without email, so it fails outright if this secret is missing — see that
-function's own code).
+Without this secret set, flagging, replying, and requesting/deciding leave
+still work either way — the underlying record (note, reply, leave request,
+decision) is saved regardless, only the email notification is skipped.
+`weekly-summary-email` is the one exception: it has nothing to do without
+email, so it fails outright if this secret is missing — see that
+function's own code.
 
-All three send from `noreply@crewclocknz.com` (hardcoded in each
+All five send from `noreply@crewclocknz.com` (hardcoded in each
 function), which means **`crewclocknz.com` must be verified as a sending
 domain in your Resend account** — Resend will silently reject sends from
 an address on a domain it hasn't verified. If you're using a different
-domain, update the `from` address in all three:
+domain, update the `from` address in all five:
 [`supabase/functions/submit-worker-note/index.ts`](supabase/functions/submit-worker-note/index.ts),
 [`supabase/functions/submit-note-reply/index.ts`](supabase/functions/submit-note-reply/index.ts),
+[`supabase/functions/weekly-summary-email/index.ts`](supabase/functions/weekly-summary-email/index.ts),
+[`supabase/functions/submit-leave-request/index.ts`](supabase/functions/submit-leave-request/index.ts),
 and
-[`supabase/functions/weekly-summary-email/index.ts`](supabase/functions/weekly-summary-email/index.ts).
+[`supabase/functions/decide-leave-request/index.ts`](supabase/functions/decide-leave-request/index.ts).
 
 Note: removing a worker deletes their Supabase Auth account, which cascades
 (see `schema.sql`) to their `users` row and from there to all of their

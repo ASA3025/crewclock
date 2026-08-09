@@ -103,6 +103,26 @@ create table public.worker_note_replies (
   created_at timestamptz not null default now()
 );
 
+-- A worker's request for time off, covering start_date..end_date
+-- inclusive (a single day has start_date = end_date). Always created by
+-- the submit-leave-request Edge Function (service role, same reasoning
+-- as worker_notes — it looks up admin emails to notify) and decided by
+-- the decide-leave-request Edge Function (also service role, so it can
+-- look up the worker's email to notify them of the outcome).
+create table public.leave_requests (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.users (id) on delete cascade,
+  business_id uuid not null references public.businesses (id) on delete cascade,
+  start_date date not null,
+  end_date date not null,
+  reason text,
+  status text not null default 'pending' check (status in ('pending', 'approved', 'denied')),
+  decided_at timestamptz,
+  decided_by uuid references public.users (id) on delete set null,
+  created_at timestamptz not null default now(),
+  constraint leave_requests_valid_range check (end_date >= start_date)
+);
+
 create index shifts_user_id_idx on public.shifts (user_id);
 create index shifts_business_id_idx on public.shifts (business_id);
 create index roster_entries_business_id_idx on public.roster_entries (business_id);
@@ -112,6 +132,8 @@ create index worker_notes_business_id_idx on public.worker_notes (business_id);
 create index worker_notes_user_id_idx on public.worker_notes (user_id);
 create index worker_note_replies_note_id_idx on public.worker_note_replies (worker_note_id);
 create index worker_note_replies_business_id_idx on public.worker_note_replies (business_id);
+create index leave_requests_business_id_idx on public.leave_requests (business_id);
+create index leave_requests_user_id_idx on public.leave_requests (user_id);
 
 -- ---------------------------------------------------------------------------
 -- Helper functions (security definer so RLS policies on `users` don't
@@ -149,6 +171,7 @@ alter table public.shifts enable row level security;
 alter table public.roster_entries enable row level security;
 alter table public.worker_notes enable row level security;
 alter table public.worker_note_replies enable row level security;
+alter table public.leave_requests enable row level security;
 
 -- businesses: read-only from the client, scoped to your own business.
 -- Rows are created manually (see SETUP.md) using the Supabase service role,
@@ -233,6 +256,17 @@ create policy "admin select business note replies" on public.worker_note_replies
 -- No insert policy: replies are created by the submit-note-reply Edge
 -- Function using the service role key — same reasoning as worker_notes
 -- above (it looks up the other party's email to notify them).
+
+-- leave_requests
+create policy "worker select own leave requests" on public.leave_requests
+  for select using (user_id = public.app_user_id());
+
+create policy "admin select business leave requests" on public.leave_requests
+  for select using (public.app_role() = 'admin' and business_id = public.app_business_id());
+-- No insert or update policy: requests are created by submit-leave-request
+-- and decided by decide-leave-request, both using the service role key —
+-- same reasoning as worker_notes (each needs to look up and email the
+-- other party, which the caller's own RLS-scoped client can't do).
 
 -- ---------------------------------------------------------------------------
 -- Storage: shift photos

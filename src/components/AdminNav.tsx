@@ -5,6 +5,7 @@ import {
   CalendarBlank,
   Download,
   Flag,
+  Airplane,
   UsersThree,
   SignOut,
 } from '@phosphor-icons/react'
@@ -15,6 +16,7 @@ const items = [
   { to: '/admin/hours', label: 'Hours', icon: ClockCounterClockwise },
   { to: '/admin/roster', label: 'Roster', icon: CalendarBlank },
   { to: '/admin/flags', label: 'Flags', icon: Flag },
+  { to: '/admin/leave', label: 'Leave', icon: Airplane },
   { to: '/admin/export', label: 'Export', icon: Download },
   { to: '/admin/workers', label: 'Workers', icon: UsersThree },
 ]

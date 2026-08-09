@@ -13,12 +13,14 @@ import { WorkerHome } from './pages/worker/Home'
 import { WorkerHoursHistory } from './pages/worker/HoursHistory'
 import { WorkerRoster } from './pages/worker/Roster'
 import { WorkerNotes } from './pages/worker/Notes'
+import { WorkerLeave } from './pages/worker/Leave'
 import { AdminOverview } from './pages/admin/Overview'
 import { AdminHours } from './pages/admin/Hours'
 import { AdminRosterBuilder } from './pages/admin/RosterBuilder'
 import { AdminExport } from './pages/admin/Export'
 import { AdminWorkers } from './pages/admin/Workers'
 import { AdminFlags } from './pages/admin/Flags'
+import { AdminLeave } from './pages/admin/Leave'
 
 // Supabase invite/recovery links redirect to the site root with a token in
 // the URL hash, so `/` has to decide between the marketing page and the
@@ -73,6 +75,7 @@ function App() {
               <Route path="/worker/hours" element={<WorkerHoursHistory />} />
               <Route path="/worker/roster" element={<WorkerRoster />} />
               <Route path="/worker/notes" element={<WorkerNotes />} />
+              <Route path="/worker/leave" element={<WorkerLeave />} />
             </Route>
           </Route>
 
@@ -84,6 +87,7 @@ function App() {
               <Route path="/admin/export" element={<AdminExport />} />
               <Route path="/admin/workers" element={<AdminWorkers />} />
               <Route path="/admin/flags" element={<AdminFlags />} />
+              <Route path="/admin/leave" element={<AdminLeave />} />
             </Route>
           </Route>
 

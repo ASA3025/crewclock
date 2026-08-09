@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
-import { CaretLeft, CaretRight, Trash, Plus } from '@phosphor-icons/react'
+import { CaretLeft, CaretRight, Trash, Plus, Warning } from '@phosphor-icons/react'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabaseClient'
 import { PageHeader } from '../../components/PageHeader'
 import { Card } from '../../components/Card'
 import { Button } from '../../components/Button'
 import { formatNzDate, formatShiftTimeRange, nzDateIso } from '../../utils/datetime'
-import type { AppUser, RosterEntryWithWorker } from '../../types'
+import type { AppUser, LeaveRequest, RosterEntryWithWorker } from '../../types'
 
 function startOfWeek(d: Date) {
   const date = new Date(d)
@@ -27,6 +27,7 @@ export function AdminRosterBuilder() {
   const [formLocation, setFormLocation] = useState('')
   const [formStartTime, setFormStartTime] = useState('')
   const [formEndTime, setFormEndTime] = useState('')
+  const [approvedLeave, setApprovedLeave] = useState<LeaveRequest[]>([])
 
   const days = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(weekStart)
@@ -37,14 +38,33 @@ export function AdminRosterBuilder() {
 
   async function load() {
     if (!appUser) return
-    const { data } = await supabase
-      .from('roster_entries')
-      .select('*, users(id, name)')
-      .eq('business_id', appUser.business_id)
-      .gte('date', nzDateIso(weekStart))
-      .lte('date', nzDateIso(weekEnd))
-      .order('date')
-    setEntries((data as RosterEntryWithWorker[]) ?? [])
+    const [entriesRes, leaveRes] = await Promise.all([
+      supabase
+        .from('roster_entries')
+        .select('*, users(id, name)')
+        .eq('business_id', appUser.business_id)
+        .gte('date', nzDateIso(weekStart))
+        .lte('date', nzDateIso(weekEnd))
+        .order('date'),
+      // Only need overlap with the visible week: a leave request overlaps
+      // if it starts on or before the week ends and ends on or after the
+      // week starts — the usual date-range-overlap check.
+      supabase
+        .from('leave_requests')
+        .select('*')
+        .eq('business_id', appUser.business_id)
+        .eq('status', 'approved')
+        .lte('start_date', nzDateIso(weekEnd))
+        .gte('end_date', nzDateIso(weekStart)),
+    ])
+    setEntries((entriesRes.data as RosterEntryWithWorker[]) ?? [])
+    setApprovedLeave((leaveRes.data as LeaveRequest[]) ?? [])
+  }
+
+  function approvedLeaveFor(userId: string, dayIso: string): boolean {
+    return approvedLeave.some(
+      (l) => l.user_id === userId && l.start_date <= dayIso && l.end_date >= dayIso
+    )
   }
 
   useEffect(() => {
@@ -167,6 +187,11 @@ export function AdminRosterBuilder() {
                       </option>
                     ))}
                   </select>
+                  {approvedLeaveFor(formWorker, dayIso) && (
+                    <p className="flex items-center gap-1 text-[11px] text-warning">
+                      <Warning size={12} weight="fill" /> On approved leave this day
+                    </p>
+                  )}
                   <input
                     value={formLocation}
                     onChange={(e) => setFormLocation(e.target.value)}

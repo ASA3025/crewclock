@@ -80,3 +80,22 @@ export interface WorkerNoteReply {
   message: string
   created_at: string
 }
+
+export type LeaveStatus = 'pending' | 'approved' | 'denied'
+
+export interface LeaveRequest {
+  id: string
+  user_id: string
+  business_id: string
+  start_date: string
+  end_date: string
+  reason: string | null
+  status: LeaveStatus
+  decided_at: string | null
+  decided_by: string | null
+  created_at: string
+}
+
+export interface LeaveRequestWithWorker extends LeaveRequest {
+  users: Pick<AppUser, 'id' | 'name'>
+}
