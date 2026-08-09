@@ -102,10 +102,10 @@ export function Privacy() {
         <p>
           Questions about this policy or your data:{' '}
           <a
-            href="mailto:arundeepatkar2008@gmail.com"
+            href="mailto:crewclocknz@gmail.com"
             className="text-accent hover:underline"
           >
-            arundeepatkar2008@gmail.com
+            crewclocknz@gmail.com
           </a>
         </p>
       </Section>
