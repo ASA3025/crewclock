@@ -17,6 +17,7 @@ export function AdminFlags() {
   const [noteStatus, setNoteStatus] = useState<'open' | 'resolved' | 'all'>('open')
   const [noteFrom, setNoteFrom] = useState('')
   const [noteTo, setNoteTo] = useState('')
+  const [search, setSearch] = useState('')
 
   const load = useCallback(async () => {
     if (!appUser) return
@@ -73,6 +74,10 @@ export function AdminFlags() {
     return () => clearInterval(id)
   }, [load])
 
+  const filteredNotes = notes.filter((n) =>
+    n.users.name.toLowerCase().includes(search.trim().toLowerCase())
+  )
+
   return (
     <div>
       <PageHeader title="Flags" subtitle="Everything your crew has flagged or messaged you about" />
@@ -120,14 +125,24 @@ export function AdminFlags() {
               Clear dates
             </button>
           )}
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-muted-fg">Worker</label>
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search workers…"
+              className="h-10 rounded-lg border border-border px-3 text-sm outline-none focus:border-accent"
+            />
+          </div>
         </Card>
 
         <div className="flex flex-col gap-2">
           {loading && <p className="text-sm text-muted-fg">Loading…</p>}
-          {!loading && notes.length === 0 && (
+          {!loading && filteredNotes.length === 0 && (
             <p className="text-sm text-muted-fg">No flags match these filters.</p>
           )}
-          {notes.map((n) => (
+          {filteredNotes.map((n) => (
             <Card key={n.id} className="flex flex-col gap-3">
               <div className="flex items-start justify-between gap-3">
                 <div>
