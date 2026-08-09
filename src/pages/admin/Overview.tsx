@@ -1,16 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
-import { CheckCircle, Clock, Flag, HourglassMedium, Warning } from '@phosphor-icons/react'
+import { Link } from 'react-router-dom'
+import { CaretRight, CheckCircle, Clock, Flag, HourglassMedium, Warning } from '@phosphor-icons/react'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabaseClient'
 import { PageHeader } from '../../components/PageHeader'
 import { Card } from '../../components/Card'
-import { Button } from '../../components/Button'
 import { Avatar } from '../../components/Avatar'
-import { NoteReplyThread } from '../../components/NoteReplyThread'
 import { StatusPill } from '../../components/StatusPill'
 import { formatHours, isStaleOpenShift, shiftHours } from '../../utils/pay'
 import {
-  formatNzDate,
   formatNzTime,
   formatWallClockTime,
   nzDateIso,
@@ -19,13 +17,7 @@ import {
   nzStartOfDayInstant,
   wallClockMinutes,
 } from '../../utils/datetime'
-import type {
-  AppUser,
-  RosterEntry,
-  ShiftWithWorker,
-  WorkerNoteReply,
-  WorkerNoteWithContext,
-} from '../../types'
+import type { AppUser, RosterEntry, ShiftWithWorker } from '../../types'
 
 type WorkerStatus =
   | { kind: 'stale_clocked_in'; since: string }
@@ -54,29 +46,14 @@ export function AdminOverview() {
   const [clockedIn, setClockedIn] = useState<ShiftWithWorker[]>([])
   const [todayShifts, setTodayShifts] = useState<ShiftWithWorker[]>([])
   const [todayRoster, setTodayRoster] = useState<Pick<RosterEntry, 'user_id' | 'start_time'>[]>([])
-  const [notes, setNotes] = useState<WorkerNoteWithContext[]>([])
-  const [replies, setReplies] = useState<Record<string, WorkerNoteReply[]>>({})
+  const [openFlagsCount, setOpenFlagsCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [noteStatus, setNoteStatus] = useState<'open' | 'resolved' | 'all'>('open')
-  const [noteFrom, setNoteFrom] = useState('')
-  const [noteTo, setNoteTo] = useState('')
 
   const load = useCallback(async () => {
     if (!appUser) return
 
-    let notesQuery = supabase
-      .from('worker_notes')
-      .select('*, users(id, name), shifts(clock_in_time), roster_entries(date, location_label)')
-      .eq('business_id', appUser.business_id)
-
-    if (noteStatus === 'open') notesQuery = notesQuery.eq('resolved', false)
-    else if (noteStatus === 'resolved') notesQuery = notesQuery.eq('resolved', true)
-    if (noteFrom) notesQuery = notesQuery.gte('created_at', nzStartOfDayInstant(noteFrom))
-    if (noteTo) notesQuery = notesQuery.lte('created_at', nzEndOfDayInstant(noteTo))
-    notesQuery = notesQuery.order('created_at', { ascending: false })
-
-    const [workersRes, clockedInRes, todayRes, rosterRes, notesRes] = await Promise.all([
+    const [workersRes, clockedInRes, todayRes, rosterRes, openFlagsRes] = await Promise.all([
       supabase
         .from('users')
         .select('*')
@@ -100,46 +77,23 @@ export function AdminOverview() {
         .select('user_id, start_time')
         .eq('business_id', appUser.business_id)
         .eq('date', nzDateIso()),
-      notesQuery,
+      // Just a count — the full flag list with its replies/filters now
+      // lives on its own page (/admin/flags) so Overview stays a quick
+      // glance rather than growing without bound as flags accumulate.
+      supabase
+        .from('worker_notes')
+        .select('id', { count: 'exact', head: true })
+        .eq('business_id', appUser.business_id)
+        .eq('resolved', false),
     ])
 
     setWorkers((workersRes.data as AppUser[]) ?? [])
     setClockedIn((clockedInRes.data as ShiftWithWorker[]) ?? [])
     setTodayShifts((todayRes.data as ShiftWithWorker[]) ?? [])
     setTodayRoster((rosterRes.data as Pick<RosterEntry, 'user_id' | 'start_time'>[]) ?? [])
-    const loadedNotes = (notesRes.data as WorkerNoteWithContext[]) ?? []
-    setNotes(loadedNotes)
-
-    if (loadedNotes.length > 0) {
-      const { data: repliesData } = await supabase
-        .from('worker_note_replies')
-        .select('*')
-        .in(
-          'worker_note_id',
-          loadedNotes.map((n) => n.id)
-        )
-        .order('created_at', { ascending: true })
-      const grouped: Record<string, WorkerNoteReply[]> = {}
-      for (const r of (repliesData as WorkerNoteReply[]) ?? []) {
-        ;(grouped[r.worker_note_id] ??= []).push(r)
-      }
-      setReplies(grouped)
-    } else {
-      setReplies({})
-    }
-
+    setOpenFlagsCount(openFlagsRes.count ?? 0)
     setLoading(false)
-  }, [appUser, noteStatus, noteFrom, noteTo])
-
-  async function toggleResolved(note: WorkerNoteWithContext) {
-    await supabase.from('worker_notes').update({ resolved: !note.resolved }).eq('id', note.id)
-    if (noteStatus === 'all') {
-      setNotes((prev) => prev.map((n) => (n.id === note.id ? { ...n, resolved: !n.resolved } : n)))
-    } else {
-      // Filtered to one status — either way, this note no longer belongs in this view.
-      setNotes((prev) => prev.filter((n) => n.id !== note.id))
-    }
-  }
+  }, [appUser])
 
   useEffect(() => {
     load()
@@ -240,105 +194,22 @@ export function AdminOverview() {
         </div>
         <p className="text-xs text-muted-fg">{formatHours(hoursToday)} logged across the team today</p>
 
-        <div>
-          <h2 className="mb-3 flex items-center gap-1.5 font-heading text-sm font-bold text-fg">
-            <Flag size={15} weight="fill" className="text-destructive" /> Flags from your crew
-          </h2>
-          <Card className="mb-3 flex flex-wrap items-end gap-3">
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-muted-fg">Status</label>
-              <select
-                value={noteStatus}
-                onChange={(e) => setNoteStatus(e.target.value as 'open' | 'resolved' | 'all')}
-                className="h-10 rounded-lg border border-border px-3 text-sm"
-              >
-                <option value="open">Open</option>
-                <option value="resolved">Resolved</option>
-                <option value="all">All</option>
-              </select>
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-muted-fg">From</label>
-              <input
-                type="date"
-                value={noteFrom}
-                onChange={(e) => setNoteFrom(e.target.value)}
-                className="h-10 rounded-lg border border-border px-3 text-sm"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-muted-fg">To</label>
-              <input
-                type="date"
-                value={noteTo}
-                onChange={(e) => setNoteTo(e.target.value)}
-                className="h-10 rounded-lg border border-border px-3 text-sm"
-              />
-            </div>
-            {(noteFrom || noteTo) && (
-              <button
-                onClick={() => {
-                  setNoteFrom('')
-                  setNoteTo('')
-                }}
-                className="h-10 cursor-pointer text-xs font-medium text-accent hover:underline"
-              >
-                Clear dates
-              </button>
-            )}
-          </Card>
-          <div className="flex flex-col gap-2">
-            {!loading && notes.length === 0 && (
-              <p className="text-sm text-muted-fg">No flags match these filters.</p>
-            )}
-            {notes.map((n) => (
-              <Card key={n.id} className="flex flex-col gap-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-sm font-semibold text-fg">{n.users.name}</p>
-                      <StatusPill tone={n.shifts ? 'accent' : n.roster_entries ? 'warning' : 'muted'}>
-                        {n.shifts
-                          ? formatNzDate(n.shifts.clock_in_time, {
-                              weekday: 'short',
-                              day: 'numeric',
-                              month: 'short',
-                            })
-                          : n.roster_entries
-                            ? `Upcoming: ${formatNzDate(n.roster_entries.date, {
-                                weekday: 'short',
-                                day: 'numeric',
-                                month: 'short',
-                              })} · ${n.roster_entries.location_label}`
-                            : 'General note'}
-                      </StatusPill>
-                      <StatusPill tone={n.resolved ? 'success' : 'muted'}>
-                        {n.resolved ? 'Resolved' : 'Open'}
-                      </StatusPill>
-                    </div>
-                    <p className="mt-1 text-sm text-fg">{n.message}</p>
-                  </div>
-                  <Button
-                    size="md"
-                    variant="secondary"
-                    className="h-8 shrink-0 px-3 text-xs"
-                    onClick={() => toggleResolved(n)}
-                  >
-                    {n.resolved ? 'Reopen' : 'Mark resolved'}
-                  </Button>
-                </div>
-                {appUser && (
-                  <NoteReplyThread
-                    noteId={n.id}
-                    replies={replies[n.id] ?? []}
-                    currentUserId={appUser.id}
-                    onSent={load}
-                  />
-                )}
-              </Card>
-            ))}
-          </div>
-        </div>
+        <Link
+          to="/admin/flags"
+          className="flex max-w-lg items-center justify-between gap-3 rounded-xl border border-border bg-white p-4 shadow-sm transition-colors duration-150 hover:border-accent"
+        >
+          <span className="flex items-center gap-2 text-sm font-semibold text-fg">
+            <Flag
+              size={16}
+              weight={openFlagsCount > 0 ? 'fill' : 'regular'}
+              className={openFlagsCount > 0 ? 'text-destructive' : 'text-muted-fg'}
+            />
+            {openFlagsCount > 0
+              ? `${openFlagsCount} open flag${openFlagsCount === 1 ? '' : 's'}`
+              : 'No open flags'}
+          </span>
+          <CaretRight size={16} className="text-muted-fg" />
+        </Link>
 
         <div>
           <div className="mb-3 flex items-center justify-between gap-3">

@@ -103,23 +103,6 @@ create table public.worker_note_replies (
   created_at timestamptz not null default now()
 );
 
--- Caches a roster location_label's forward-geocoded coordinates (free-text
--- "Bush Rd Orchard, Block 4" -> lat/lng), looked up via Nominatim by the
--- roster-weather-forecast Edge Function so a given label is only ever
--- geocoded once, not on every Roster Builder page load. lat/lng are
--- nullable to also cache a *failed* lookup (a label too vague to geocode)
--- so that failure isn't retried against Nominatim's rate limit every time
--- either — this table has no direct client access, service-role only.
-create table public.geocoded_locations (
-  id uuid primary key default gen_random_uuid(),
-  business_id uuid not null references public.businesses (id) on delete cascade,
-  location_label text not null,
-  lat double precision,
-  lng double precision,
-  created_at timestamptz not null default now(),
-  unique (business_id, location_label)
-);
-
 create index shifts_user_id_idx on public.shifts (user_id);
 create index shifts_business_id_idx on public.shifts (business_id);
 create index roster_entries_business_id_idx on public.roster_entries (business_id);
@@ -166,10 +149,6 @@ alter table public.shifts enable row level security;
 alter table public.roster_entries enable row level security;
 alter table public.worker_notes enable row level security;
 alter table public.worker_note_replies enable row level security;
--- geocoded_locations: RLS enabled with zero policies — deliberately fully
--- locked down from the client API. Only the service-role client inside
--- roster-weather-forecast ever reads or writes this table.
-alter table public.geocoded_locations enable row level security;
 
 -- businesses: read-only from the client, scoped to your own business.
 -- Rows are created manually (see SETUP.md) using the Supabase service role,

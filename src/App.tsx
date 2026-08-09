@@ -18,6 +18,7 @@ import { AdminHours } from './pages/admin/Hours'
 import { AdminRosterBuilder } from './pages/admin/RosterBuilder'
 import { AdminExport } from './pages/admin/Export'
 import { AdminWorkers } from './pages/admin/Workers'
+import { AdminFlags } from './pages/admin/Flags'
 
 // Supabase invite/recovery links redirect to the site root with a token in
 // the URL hash, so `/` has to decide between the marketing page and the
@@ -61,6 +62,7 @@ function App() {
               <Route path="/admin/roster" element={<AdminRosterBuilder />} />
               <Route path="/admin/export" element={<AdminExport />} />
               <Route path="/admin/workers" element={<AdminWorkers />} />
+              <Route path="/admin/flags" element={<AdminFlags />} />
             </Route>
           </Route>
 
