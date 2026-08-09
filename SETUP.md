@@ -37,9 +37,10 @@ fallbacks for when an invite email doesn't reach a worker, `reverse-geocode`
 turns a shift's GPS coordinates into a readable address on the admin Hours
 page, `submit-worker-note` handles a worker flagging a shift/roster entry or
 sending a note to their admin, `submit-note-reply` handles either side
-replying within that flag's thread, and `weekly-summary-email` sends admins
+replying within that flag's thread, `weekly-summary-email` sends admins
 a Monday-morning digest (see [Weekly summary email](#weekly-summary-email-optional)
-below for the extra setup it needs). All eight need the
+below for the extra setup it needs), and `roster-weather-forecast` powers
+the weather outlook on the admin Roster Builder page. All nine need the
 [Supabase CLI](https://supabase.com/docs/guides/cli):
 
 ```bash
@@ -54,6 +55,7 @@ supabase functions deploy reverse-geocode
 supabase functions deploy submit-worker-note
 supabase functions deploy submit-note-reply
 supabase functions deploy weekly-summary-email --no-verify-jwt
+supabase functions deploy roster-weather-forecast
 ```
 
 `weekly-summary-email` is deployed with `--no-verify-jwt` because it's
@@ -63,8 +65,9 @@ so it's still not callable by just anyone who finds the URL.
 
 No extra secrets needed for most of these — Supabase injects the project
 URL and keys into every Edge Function automatically, and `reverse-geocode`
-calls OpenStreetMap's free Nominatim API, which needs no API key or account
-of its own either.
+and `roster-weather-forecast` call OpenStreetMap's free Nominatim API and
+Open-Meteo's free weather API, neither of which needs an API key or
+account of its own either.
 
 `submit-worker-note`, `submit-note-reply`, and `weekly-summary-email` are
 the exception: sending any of these emails needs a

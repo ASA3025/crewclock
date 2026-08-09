@@ -69,6 +69,7 @@ export function WorkerHome() {
   const [todayRosterFlagged, setTodayRosterFlagged] = useState(false)
   const [flagRosterOpen, setFlagRosterOpen] = useState(false)
   const [weather, setWeather] = useState<CurrentWeather | null>(null)
+  const [weatherStatus, setWeatherStatus] = useState<'locating' | 'ok' | 'unavailable'>('locating')
 
   useEffect(() => {
     if (!appUser) return
@@ -124,15 +125,28 @@ export function WorkerHome() {
     return () => clearInterval(id)
   }, [openShift])
 
-  // Silent, best-effort — if location is denied or unavailable, the
-  // weather card just doesn't show rather than asking twice or erroring.
+  // Best-effort, but never silently so — if location is denied or the
+  // lookup fails, that's shown as a short explanation rather than leaving
+  // the whole feature looking like it was never built (see the earlier
+  // bug where exactly that happened and was indistinguishable from a
+  // missing feature).
   useEffect(() => {
-    if (!navigator.geolocation) return
+    if (!navigator.geolocation) {
+      setWeatherStatus('unavailable')
+      return
+    }
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        fetchCurrentWeather(pos.coords.latitude, pos.coords.longitude).then(setWeather)
+        fetchCurrentWeather(pos.coords.latitude, pos.coords.longitude).then((result) => {
+          if (result) {
+            setWeather(result)
+            setWeatherStatus('ok')
+          } else {
+            setWeatherStatus('unavailable')
+          }
+        })
       },
-      () => {},
+      () => setWeatherStatus('unavailable'),
       { enableHighAccuracy: false, timeout: 8000, maximumAge: 10 * 60 * 1000 }
     )
   }, [])
@@ -225,7 +239,8 @@ export function WorkerHome() {
           <p className="text-sm text-muted-fg">
             {formatNzDate(new Date(), { weekday: 'long', month: 'long', day: 'numeric' })}
           </p>
-          {weather &&
+          {weatherStatus === 'ok' &&
+            weather &&
             (() => {
               const { label, kind } = describeWeatherCode(weather.code)
               const Icon = WEATHER_ICONS[kind]
@@ -236,6 +251,9 @@ export function WorkerHome() {
                 </p>
               )
             })()}
+          {weatherStatus === 'unavailable' && (
+            <p className="text-xs text-muted-fg">Weather unavailable — check location access</p>
+          )}
         </div>
         <h1 className="font-heading text-2xl font-bold text-fg">
           {appUser ? `G'day, ${appUser.name.split(' ')[0]}` : 'G’day'}

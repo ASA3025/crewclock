@@ -1,12 +1,49 @@
-import { useEffect, useState } from 'react'
-import { CaretLeft, CaretRight, Trash, Plus } from '@phosphor-icons/react'
+import { useEffect, useMemo, useState } from 'react'
+import {
+  CaretLeft,
+  CaretRight,
+  Trash,
+  Plus,
+  Cloud,
+  CloudFog,
+  CloudLightning,
+  CloudRain,
+  CloudSnow,
+  CloudSun,
+  Sun,
+} from '@phosphor-icons/react'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabaseClient'
 import { PageHeader } from '../../components/PageHeader'
 import { Card } from '../../components/Card'
 import { Button } from '../../components/Button'
 import { formatNzDate, formatShiftTimeRange, nzDateIso } from '../../utils/datetime'
+import { describeWeatherCode, type WeatherKind } from '../../utils/weather'
 import type { AppUser, RosterEntryWithWorker } from '../../types'
+
+const WEATHER_ICONS: Record<WeatherKind, typeof Sun> = {
+  sun: Sun,
+  'cloud-sun': CloudSun,
+  cloud: Cloud,
+  fog: CloudFog,
+  rain: CloudRain,
+  snow: CloudSnow,
+  storm: CloudLightning,
+}
+
+interface DayForecast {
+  date: string
+  code: number
+  tempMax: number
+  tempMin: number
+}
+
+interface LocationForecast {
+  location_label: string
+  lat: number | null
+  lng: number | null
+  days: DayForecast[]
+}
 
 function startOfWeek(d: Date) {
   const date = new Date(d)
@@ -27,6 +64,8 @@ export function AdminRosterBuilder() {
   const [formLocation, setFormLocation] = useState('')
   const [formStartTime, setFormStartTime] = useState('')
   const [formEndTime, setFormEndTime] = useState('')
+  const [forecasts, setForecasts] = useState<LocationForecast[]>([])
+  const [forecastsLoading, setForecastsLoading] = useState(false)
 
   const days = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(weekStart)
@@ -34,6 +73,11 @@ export function AdminRosterBuilder() {
     return d
   })
   const weekEnd = days[6]
+
+  const distinctLocations = useMemo(
+    () => Array.from(new Set(entries.map((e) => e.location_label))).sort(),
+    [entries]
+  )
 
   async function load() {
     if (!appUser) return
@@ -63,6 +107,27 @@ export function AdminRosterBuilder() {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appUser, weekStart])
+
+  useEffect(() => {
+    if (distinctLocations.length === 0) {
+      setForecasts([])
+      return
+    }
+    setForecastsLoading(true)
+    supabase.functions
+      .invoke('roster-weather-forecast', {
+        body: {
+          location_labels: distinctLocations,
+          start_date: nzDateIso(weekStart),
+          end_date: nzDateIso(weekEnd),
+        },
+      })
+      .then(({ data, error }) => {
+        setForecasts(!error && data?.forecasts ? (data.forecasts as LocationForecast[]) : [])
+        setForecastsLoading(false)
+      })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [distinctLocations.join('|'), weekStart])
 
   function openForm(dayIso: string) {
     setFormDay(dayIso)
@@ -119,6 +184,54 @@ export function AdminRosterBuilder() {
           </div>
         }
       />
+
+      {distinctLocations.length > 0 && (
+        <div className="flex flex-col gap-2 px-4 pt-4 md:px-8 md:pt-8">
+          <h2 className="font-heading text-sm font-bold text-fg">Weather outlook</h2>
+          {forecastsLoading && forecasts.length === 0 && (
+            <p className="text-xs text-muted-fg">Loading forecast…</p>
+          )}
+          {!forecastsLoading && forecasts.length === 0 && (
+            <p className="text-xs text-muted-fg">Forecast unavailable for this week.</p>
+          )}
+          <div className="flex flex-col gap-2">
+            {forecasts.map((loc) => (
+              <Card key={loc.location_label} className="flex flex-col gap-2 md:flex-row md:items-center md:gap-4">
+                <p className="w-full shrink-0 text-xs font-semibold text-fg md:w-40">
+                  {loc.location_label}
+                </p>
+                {loc.days.length === 0 ? (
+                  <p className="text-xs text-muted-fg">
+                    {loc.lat == null
+                      ? "Couldn't find this location for a forecast."
+                      : 'No forecast available for this week yet.'}
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-7 gap-2">
+                    {loc.days.map((day) => {
+                      const { label, kind } = describeWeatherCode(day.code)
+                      const Icon = WEATHER_ICONS[kind]
+                      return (
+                        <div key={day.date} className="flex flex-col items-center gap-0.5 text-center">
+                          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-fg">
+                            {formatNzDate(day.date, { weekday: 'short' })}
+                          </p>
+                          <span title={label}>
+                            <Icon size={18} />
+                          </span>
+                          <p className="text-[11px] text-fg">
+                            {Math.round(day.tempMax)}° <span className="text-muted-fg">{Math.round(day.tempMin)}°</span>
+                          </p>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-3 p-4 md:grid-cols-7 md:p-8">
         {days.map((day) => {
