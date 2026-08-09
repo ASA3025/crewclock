@@ -1,20 +1,22 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
+  CalendarCheck,
   CheckSquare,
   ChatCircleDots,
+  ClockCountdown,
   CloudSun,
+  CurrencyDollar,
   EnvelopeSimple,
   FileCsv,
   ListChecks,
   MapPin,
-  UserCircle,
 } from '@phosphor-icons/react'
 import { Button } from '../components/Button'
 import { Footer } from '../components/Footer'
 import { LoginModal } from '../components/LoginModal'
 
-const features = [
+const crewFeatures = [
   {
     icon: MapPin,
     title: 'GPS-verified clock in/out',
@@ -26,24 +28,22 @@ const features = [
     body: "Workers see their upcoming shifts and can flag issues — wrong location, can't make it — with admin replies right in the thread.",
   },
   {
-    icon: CheckSquare,
-    title: 'Approval workflow, real addresses',
-    body: "Review hours with GPS coordinates automatically turned into readable addresses, then approve, reject, or edit each worker's shift.",
-  },
-  {
-    icon: FileCsv,
-    title: 'Payroll-ready CSV exports',
-    body: 'Export approved hours as a clean CSV, ready to hand to your accountant or payroll software.',
-  },
-  {
-    icon: EnvelopeSimple,
-    title: 'Weekly summary emails',
-    body: "A Monday-morning email with last week's hours, estimated pay, and lateness/no-show counts per worker.",
+    icon: CurrencyDollar,
+    title: 'Live daily pay estimate',
+    body: "A running estimate of the day's pay updates on the worker's home screen as their shift goes, no waiting for payday to see it.",
   },
   {
     icon: CloudSun,
     title: 'Weather for your crew',
     body: "Current conditions on a worker's home screen — handy context before heading out to outdoor work.",
+  },
+]
+
+const managementFeatures = [
+  {
+    icon: CheckSquare,
+    title: 'Approval workflow, real addresses',
+    body: "Review hours with GPS coordinates automatically turned into readable addresses, then approve, reject, or edit each worker's shift.",
   },
   {
     icon: ListChecks,
@@ -51,9 +51,24 @@ const features = [
     body: 'Select multiple shifts — or all of them — and approve them together instead of one at a time.',
   },
   {
-    icon: UserCircle,
-    title: 'Worker profile photos',
-    body: 'Add a photo for each worker so your crew is easy to recognize at a glance on the Workers and Overview pages.',
+    icon: FileCsv,
+    title: 'Payroll-ready CSV exports',
+    body: 'Export approved hours as a clean CSV, ready to hand to your accountant or payroll software.',
+  },
+  {
+    icon: CalendarCheck,
+    title: 'NZ public holiday awareness',
+    body: 'Shifts falling on a public holiday are flagged on the Hours page, so pay decisions account for it before you approve.',
+  },
+  {
+    icon: EnvelopeSimple,
+    title: 'Weekly summary emails',
+    body: "A Monday-morning email with last week's hours, estimated pay, and lateness/no-show counts per worker.",
+  },
+  {
+    icon: ClockCountdown,
+    title: 'Automatic no-show/late detection',
+    body: "Compares actual clock-ins against the roster and flags who's running late or hasn't shown up — no manual checking required.",
   },
 ]
 
@@ -93,16 +108,40 @@ export function Landing() {
             <p className="mx-auto mt-2 max-w-md text-center text-sm text-muted-fg">
               Everything your crew and your books need, in one app.
             </p>
-            <div className="mt-10 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
-              {features.map(({ icon: Icon, title, body }) => (
-                <div key={title} className="flex flex-col items-start gap-3">
-                  <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-navy/5 text-navy">
-                    <Icon size={22} weight="regular" />
-                  </span>
-                  <h3 className="font-heading text-base font-bold text-fg">{title}</h3>
-                  <p className="text-sm leading-relaxed text-muted-fg">{body}</p>
+            <div className="mt-10 grid gap-x-10 gap-y-12 lg:grid-cols-2">
+              <div>
+                <h3 className="border-b border-border pb-3 font-heading text-lg font-bold text-fg">
+                  For Field Crews
+                </h3>
+                <div className="mt-8 grid gap-8 sm:grid-cols-2">
+                  {crewFeatures.map(({ icon: Icon, title, body }) => (
+                    <div key={title} className="flex flex-col items-start gap-3">
+                      <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-navy/5 text-navy">
+                        <Icon size={22} weight="regular" />
+                      </span>
+                      <h4 className="font-heading text-base font-bold text-fg">{title}</h4>
+                      <p className="text-sm leading-relaxed text-muted-fg">{body}</p>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              </div>
+
+              <div>
+                <h3 className="border-b border-border pb-3 font-heading text-lg font-bold text-fg">
+                  For Management
+                </h3>
+                <div className="mt-8 grid gap-8 sm:grid-cols-2">
+                  {managementFeatures.map(({ icon: Icon, title, body }) => (
+                    <div key={title} className="flex flex-col items-start gap-3">
+                      <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-navy/5 text-navy">
+                        <Icon size={22} weight="regular" />
+                      </span>
+                      <h4 className="font-heading text-base font-bold text-fg">{title}</h4>
+                      <p className="text-sm leading-relaxed text-muted-fg">{body}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </section>
