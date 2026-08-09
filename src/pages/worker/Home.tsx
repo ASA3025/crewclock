@@ -193,7 +193,13 @@ export function WorkerHome() {
         else if (err.code === err.TIMEOUT) setWeatherStatus('timeout')
         else setWeatherStatus('position_unavailable')
       },
-      { enableHighAccuracy: false, timeout: 8000, maximumAge: 10 * 60 * 1000 }
+      // Matches getLocation()'s options below (used for clock-in) rather
+      // than the low-accuracy/short-timeout combination this used to have
+      // — some WebKit versions are known to be flaky resolving a coarse,
+      // WiFi-only position at all, where a GPS-backed high-accuracy fix
+      // succeeds reliably. maximumAge is still weather-specific: unlike a
+      // clock-in, a position up to 10 minutes old is perfectly fine here.
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 10 * 60 * 1000 }
     )
   }, [])
 
