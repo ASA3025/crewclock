@@ -185,9 +185,13 @@ export function AdminRosterBuilder() {
         }
       />
 
-      {distinctLocations.length > 0 && (
-        <div className="flex flex-col gap-2 px-4 pt-4 md:px-8 md:pt-8">
-          <h2 className="font-heading text-sm font-bold text-fg">Weather outlook</h2>
+      <div className="flex flex-col gap-2 px-4 pt-4 md:px-8 md:pt-8">
+        <h2 className="font-heading text-sm font-bold text-fg">Weather outlook</h2>
+        {distinctLocations.length === 0 && (
+          <p className="text-xs text-muted-fg">No locations rostered this week yet.</p>
+        )}
+        {distinctLocations.length > 0 && (
+          <>
           {forecastsLoading && forecasts.length === 0 && (
             <p className="text-xs text-muted-fg">Loading forecast…</p>
           )}
@@ -230,8 +234,9 @@ export function AdminRosterBuilder() {
               </Card>
             ))}
           </div>
-        </div>
-      )}
+          </>
+        )}
+      </div>
 
       <div className="grid gap-3 p-4 md:grid-cols-7 md:p-8">
         {days.map((day) => {

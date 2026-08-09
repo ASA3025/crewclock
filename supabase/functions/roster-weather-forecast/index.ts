@@ -1,7 +1,9 @@
 // Supabase Edge Function: roster-weather-forecast
 //
-// Called by the admin Roster Builder to show a day-by-day weather outlook
-// for each distinct location on the roster for the week being viewed.
+// Called by the admin Roster Builder (any location on the business's
+// roster for the visible week) and the worker Roster page (that worker's
+// own upcoming roster locations only — enforced below, not just trusted
+// from the request body) to show a day-by-day weather outlook.
 // This is deliberately a *different* kind of lookup from the worker Home
 // screen's weather (src/utils/weather.ts): that one asks the device's own
 // GPS for "conditions right now, here". This one has no device to ask —
@@ -121,12 +123,12 @@ Deno.serve(async (req: Request) => {
 
   const { data: callerProfile, error: callerError } = await callerClient
     .from('users')
-    .select('role, business_id')
+    .select('id, role, business_id')
     .eq('auth_id', user.id)
     .single()
 
-  if (callerError || !callerProfile || callerProfile.role !== 'admin') {
-    return json({ error: 'Only an admin can look up a roster weather forecast' }, 403)
+  if (callerError || !callerProfile) {
+    return json({ error: 'Could not identify your account' }, 403)
   }
 
   const { location_labels, start_date, end_date } = await req.json()
@@ -139,7 +141,28 @@ Deno.serve(async (req: Request) => {
   }
 
   const adminClient = createClient(supabaseUrl, serviceRoleKey)
-  const uniqueLabels = Array.from(new Set<string>(location_labels))
+  let uniqueLabels = Array.from(new Set<string>(location_labels))
+
+  // An admin can ask about any location on their business's roster. A
+  // worker can only ask about locations that actually appear on their own
+  // upcoming roster — derived server-side rather than trusting the
+  // request body, so this can't be used to probe arbitrary locations.
+  if (callerProfile.role !== 'admin') {
+    const { data: ownEntries } = await adminClient
+      .from('roster_entries')
+      .select('location_label')
+      .eq('user_id', callerProfile.id)
+      .eq('business_id', callerProfile.business_id)
+      .gte('date', start_date)
+      .lte('date', end_date)
+
+    const allowedLabels = new Set((ownEntries ?? []).map((e) => e.location_label))
+    uniqueLabels = uniqueLabels.filter((label) => allowedLabels.has(label))
+
+    if (uniqueLabels.length === 0) {
+      return json({ forecasts: [] }, 200)
+    }
+  }
 
   const { data: cached } = await adminClient
     .from('geocoded_locations')
