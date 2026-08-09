@@ -23,6 +23,7 @@ create table public.users (
   role text not null check (role in ('admin', 'worker')),
   business_id uuid not null references public.businesses (id) on delete cascade,
   hourly_rate numeric(10, 2),
+  avatar_url text,
   created_at timestamptz not null default now()
 );
 
@@ -254,5 +255,40 @@ create policy "business members read shift photos" on storage.objects
   for select to authenticated
   using (
     bucket_id = 'shift-photos'
+    and (storage.foldername(name)) [1] = public.app_business_id()::text
+  );
+
+-- ---------------------------------------------------------------------------
+-- Storage: worker avatars
+-- ---------------------------------------------------------------------------
+
+insert into storage.buckets (id, name, public)
+values ('avatars', 'avatars', true)
+on conflict (id) do nothing;
+
+-- Path convention: {business_id}/{user_id}.jpg, always overwritten in place
+-- (not one file per upload like shift photos), so this needs both an
+-- insert and an update policy — the second upload for the same worker
+-- hits the update path, not a fresh insert.
+create policy "admin upload business worker avatars" on storage.objects
+  for insert to authenticated
+  with check (
+    bucket_id = 'avatars'
+    and public.app_role() = 'admin'
+    and (storage.foldername(name)) [1] = public.app_business_id()::text
+  );
+
+create policy "admin update business worker avatars" on storage.objects
+  for update to authenticated
+  using (
+    bucket_id = 'avatars'
+    and public.app_role() = 'admin'
+    and (storage.foldername(name)) [1] = public.app_business_id()::text
+  );
+
+create policy "business members read avatars" on storage.objects
+  for select to authenticated
+  using (
+    bucket_id = 'avatars'
     and (storage.foldername(name)) [1] = public.app_business_id()::text
   );

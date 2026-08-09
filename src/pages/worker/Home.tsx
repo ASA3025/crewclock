@@ -1,5 +1,20 @@
 import { useEffect, useState } from 'react'
-import { ChatCircleText, Clock, Flag, MapPin, NavigationArrow, Camera, Warning } from '@phosphor-icons/react'
+import {
+  ChatCircleText,
+  Clock,
+  Cloud,
+  CloudFog,
+  CloudLightning,
+  CloudRain,
+  CloudSnow,
+  CloudSun,
+  Flag,
+  MapPin,
+  NavigationArrow,
+  Camera,
+  Sun,
+  Warning,
+} from '@phosphor-icons/react'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabaseClient'
 import { Button } from '../../components/Button'
@@ -15,7 +30,18 @@ import {
   nzStartOfDayInstant,
 } from '../../utils/datetime'
 import { isNzPublicHoliday } from '../../utils/nzPublicHolidays'
+import { describeWeatherCode, fetchCurrentWeather, type CurrentWeather, type WeatherKind } from '../../utils/weather'
 import type { RosterEntry, Shift } from '../../types'
+
+const WEATHER_ICONS: Record<WeatherKind, typeof Sun> = {
+  sun: Sun,
+  'cloud-sun': CloudSun,
+  cloud: Cloud,
+  fog: CloudFog,
+  rain: CloudRain,
+  snow: CloudSnow,
+  storm: CloudLightning,
+}
 
 function elapsedHours(startIso: string): number {
   return Math.max((Date.now() - new Date(startIso).getTime()) / 1000 / 60 / 60, 0)
@@ -42,6 +68,7 @@ export function WorkerHome() {
   const [flagOpen, setFlagOpen] = useState(false)
   const [todayRosterFlagged, setTodayRosterFlagged] = useState(false)
   const [flagRosterOpen, setFlagRosterOpen] = useState(false)
+  const [weather, setWeather] = useState<CurrentWeather | null>(null)
 
   useEffect(() => {
     if (!appUser) return
@@ -96,6 +123,19 @@ export function WorkerHome() {
     const id = setInterval(() => forceTick((n) => n + 1), 30_000)
     return () => clearInterval(id)
   }, [openShift])
+
+  // Silent, best-effort — if location is denied or unavailable, the
+  // weather card just doesn't show rather than asking twice or erroring.
+  useEffect(() => {
+    if (!navigator.geolocation) return
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        fetchCurrentWeather(pos.coords.latitude, pos.coords.longitude).then(setWeather)
+      },
+      () => {},
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 10 * 60 * 1000 }
+    )
+  }, [])
 
   function getLocation(): Promise<{ lat: number | null; lng: number | null }> {
     return new Promise((resolve) => {
@@ -181,9 +221,22 @@ export function WorkerHome() {
   return (
     <div className="flex flex-col gap-4 p-4">
       <div>
-        <p className="text-sm text-muted-fg">
-          {formatNzDate(new Date(), { weekday: 'long', month: 'long', day: 'numeric' })}
-        </p>
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm text-muted-fg">
+            {formatNzDate(new Date(), { weekday: 'long', month: 'long', day: 'numeric' })}
+          </p>
+          {weather &&
+            (() => {
+              const { label, kind } = describeWeatherCode(weather.code)
+              const Icon = WEATHER_ICONS[kind]
+              return (
+                <p className="flex items-center gap-1 text-sm text-muted-fg">
+                  <Icon size={16} />
+                  {Math.round(weather.temperatureC)}°C · {label}
+                </p>
+              )
+            })()}
+        </div>
         <h1 className="font-heading text-2xl font-bold text-fg">
           {appUser ? `G'day, ${appUser.name.split(' ')[0]}` : 'G’day'}
         </h1>

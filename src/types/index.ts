@@ -14,6 +14,7 @@ export interface AppUser {
   role: Role
   business_id: string
   hourly_rate: number | null
+  avatar_url: string | null
   created_at: string
 }
 

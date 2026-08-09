@@ -1,11 +1,12 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Key, PaperPlaneTilt, Plus, PencilSimple, Trash } from '@phosphor-icons/react'
+import { Camera, Key, PaperPlaneTilt, Plus, PencilSimple, Trash } from '@phosphor-icons/react'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabaseClient'
 import { PageHeader } from '../../components/PageHeader'
 import { Card } from '../../components/Card'
 import { Button } from '../../components/Button'
 import { Modal } from '../../components/Modal'
+import { Avatar } from '../../components/Avatar'
 import { PasswordStrengthField } from '../../components/PasswordStrengthField'
 import { formatCurrency } from '../../utils/pay'
 import { meetsPasswordRequirements } from '../../utils/passwordStrength'
@@ -31,6 +32,7 @@ export function AdminWorkers() {
   const [passwordError, setPasswordError] = useState<string | null>(null)
   const [settingPassword, setSettingPassword] = useState(false)
   const [resendingId, setResendingId] = useState<string | null>(null)
+  const [uploadingAvatarId, setUploadingAvatarId] = useState<string | null>(null)
   const [resendMessage, setResendMessage] = useState<{
     id: string
     text: string
@@ -129,6 +131,27 @@ export function AdminWorkers() {
     setNewPassword('')
   }
 
+  async function handleAvatarChange(worker: AppUser, file: File) {
+    setUploadingAvatarId(worker.id)
+    const path = `${worker.business_id}/${worker.id}.jpg`
+    const { error: uploadError } = await supabase.storage
+      .from('avatars')
+      .upload(path, file, { upsert: true })
+
+    if (!uploadError) {
+      const publicUrl = supabase.storage.from('avatars').getPublicUrl(path).data.publicUrl
+      // The storage path never changes on re-upload, so a query-string
+      // cache-buster is what actually makes the new photo show up instead
+      // of a stale cached image at the same URL.
+      await supabase
+        .from('users')
+        .update({ avatar_url: `${publicUrl}?t=${Date.now()}` })
+        .eq('id', worker.id)
+      load()
+    }
+    setUploadingAvatarId(null)
+  }
+
   async function handleResend(worker: AppUser) {
     setResendingId(worker.id)
     setResendMessage(null)
@@ -166,9 +189,31 @@ export function AdminWorkers() {
         {workers.map((worker) => (
           <Card key={worker.id} className="flex flex-col gap-3">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-semibold text-fg">{worker.name}</p>
-                <p className="text-xs text-muted-fg">{worker.email}</p>
+              <div className="flex items-center gap-3">
+                <div className="relative shrink-0">
+                  <Avatar worker={worker} size={44} />
+                  <label
+                    aria-label="Change photo"
+                    className="absolute -bottom-1 -right-1 flex h-5 w-5 cursor-pointer items-center justify-center rounded-full border border-border bg-white text-muted-fg transition-colors duration-150 hover:text-accent"
+                  >
+                    <Camera size={11} />
+                    <input
+                      type="file"
+                      accept="image/*"
+                      disabled={uploadingAvatarId === worker.id}
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file) handleAvatarChange(worker, file)
+                        e.target.value = ''
+                      }}
+                    />
+                  </label>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-fg">{worker.name}</p>
+                  <p className="text-xs text-muted-fg">{worker.email}</p>
+                </div>
               </div>
 
               {editingId === worker.id ? (

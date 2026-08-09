@@ -171,10 +171,7 @@ Deno.serve(async (req: Request) => {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            // Resend's shared test address only reliably delivers to the
-            // account owner's own verified email. Replace this once a
-            // custom sending domain is verified in Resend — see SETUP.md.
-            from: 'Crewclock <onboarding@resend.dev>',
+            from: 'Crewclock <noreply@crewclocknz.com>',
             to: adminEmails,
             subject,
             html: `

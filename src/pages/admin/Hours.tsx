@@ -37,10 +37,13 @@ export function AdminHours() {
   const [photoTarget, setPhotoTarget] = useState<string | null>(null)
   const [noteTarget, setNoteTarget] = useState<string | null>(null)
   const [resolvedAddresses, setResolvedAddresses] = useState<Record<string, string>>({})
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkApproving, setBulkApproving] = useState(false)
 
   async function load() {
     if (!appUser) return
     setLoading(true)
+    setSelectedIds(new Set())
     let query = supabase
       .from('shifts')
       .select('*, users(id, name, email, hourly_rate)')
@@ -119,6 +122,30 @@ export function AdminHours() {
       .from('shifts')
       .update({ approved: false, rejected: !shift.rejected })
       .eq('id', shift.id)
+    load()
+  }
+
+  function toggleSelected(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function toggleSelectAll() {
+    setSelectedIds((prev) => (prev.size === shifts.length ? new Set() : new Set(shifts.map((s) => s.id))))
+  }
+
+  async function approveSelected() {
+    if (selectedIds.size === 0) return
+    setBulkApproving(true)
+    await supabase
+      .from('shifts')
+      .update({ approved: true, rejected: false })
+      .in('id', Array.from(selectedIds))
+    setBulkApproving(false)
     load()
   }
 
@@ -213,10 +240,38 @@ export function AdminHours() {
           </Card>
         </div>
 
+        {selectedIds.size > 0 && (
+          <Card className="flex items-center justify-between gap-3 !bg-navy text-navy-fg">
+            <p className="text-sm font-medium">{selectedIds.size} selected</p>
+            <div className="flex items-center gap-2">
+              <Button
+                size="md"
+                variant="secondary"
+                className="h-9 px-3 text-xs"
+                onClick={() => setSelectedIds(new Set())}
+              >
+                Clear
+              </Button>
+              <Button size="md" className="h-9 px-3 text-xs" onClick={approveSelected} disabled={bulkApproving}>
+                {bulkApproving ? 'Approving…' : `Approve selected (${selectedIds.size})`}
+              </Button>
+            </div>
+          </Card>
+        )}
+
         <div className="overflow-x-auto rounded-xl border border-border bg-white">
           <table className="w-full min-w-[720px] text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs font-semibold uppercase tracking-wide text-muted-fg">
+                <th className="px-4 py-3">
+                  <input
+                    type="checkbox"
+                    aria-label="Select all"
+                    checked={shifts.length > 0 && selectedIds.size === shifts.length}
+                    onChange={toggleSelectAll}
+                    className="cursor-pointer"
+                  />
+                </th>
                 <th className="px-4 py-3">Worker</th>
                 <th className="px-4 py-3">Date</th>
                 <th className="px-4 py-3">Clock in</th>
@@ -233,20 +288,29 @@ export function AdminHours() {
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={11} className="px-4 py-6 text-center text-muted-fg">
+                  <td colSpan={12} className="px-4 py-6 text-center text-muted-fg">
                     Loading…
                   </td>
                 </tr>
               )}
               {!loading && shifts.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="px-4 py-6 text-center text-muted-fg">
+                  <td colSpan={12} className="px-4 py-6 text-center text-muted-fg">
                     No shifts in this range.
                   </td>
                 </tr>
               )}
               {shifts.map((shift) => (
                 <tr key={shift.id} className="border-b border-border last:border-0">
+                  <td className="px-4 py-3">
+                    <input
+                      type="checkbox"
+                      aria-label={`Select shift for ${shift.users.name}`}
+                      checked={selectedIds.has(shift.id)}
+                      onChange={() => toggleSelected(shift.id)}
+                      className="cursor-pointer"
+                    />
+                  </td>
                   <td className="px-4 py-3 font-medium text-fg">{shift.users.name}</td>
                   <td className="px-4 py-3 text-muted-fg">
                     {formatNzDate(shift.clock_in_time, { day: 'numeric', month: 'short' })}
