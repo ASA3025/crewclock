@@ -134,6 +134,9 @@ export function WorkerHoursHistory() {
               {' – '}
               {shift.clock_out_time && formatNzTime(shift.clock_out_time)}{' '}
               · {formatHours(shiftHours(shift))}
+              {appUser?.hourly_rate ? (
+                <> · {formatCurrency(estimateGross(shiftHours(shift), appUser.hourly_rate))}</>
+              ) : null}
             </p>
             {shift.gps_lat != null && (
               <p className="flex items-center gap-1 text-xs text-muted-fg">
