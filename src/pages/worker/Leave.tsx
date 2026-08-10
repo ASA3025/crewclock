@@ -8,12 +8,15 @@ import { Button } from '../../components/Button'
 import { Modal } from '../../components/Modal'
 import { StatusPill } from '../../components/StatusPill'
 import { formatNzDate, nzDateIso } from '../../utils/datetime'
-import type { LeaveRequest } from '../../types'
+import type { LeaveRequest, LeaveStatus } from '../../types'
 
 export function WorkerLeave() {
   const { appUser } = useAuth()
   const [requests, setRequests] = useState<LeaveRequest[]>([])
   const [loading, setLoading] = useState(true)
+  const [status, setStatus] = useState<LeaveStatus | 'all'>('all')
+  const [filterFrom, setFilterFrom] = useState('')
+  const [filterTo, setFilterTo] = useState('')
   const [formOpen, setFormOpen] = useState(false)
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
@@ -23,14 +26,19 @@ export function WorkerLeave() {
 
   const load = useCallback(async () => {
     if (!appUser) return
-    const { data } = await supabase
-      .from('leave_requests')
-      .select('*')
-      .eq('user_id', appUser.id)
-      .order('start_date', { ascending: false })
+    setLoading(true)
+
+    let query = supabase.from('leave_requests').select('*').eq('user_id', appUser.id)
+
+    if (status !== 'all') query = query.eq('status', status)
+    if (filterFrom) query = query.gte('start_date', filterFrom)
+    if (filterTo) query = query.lte('start_date', filterTo)
+    query = query.order('start_date', { ascending: false })
+
+    const { data } = await query
     setRequests((data as LeaveRequest[]) ?? [])
     setLoading(false)
-  }, [appUser])
+  }, [appUser, status, filterFrom, filterTo])
 
   useEffect(() => {
     load()
@@ -82,9 +90,54 @@ export function WorkerLeave() {
       />
 
       <div className="flex flex-col gap-3 p-4">
+        <Card className="flex flex-wrap items-end gap-3">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-muted-fg">Status</label>
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value as LeaveStatus | 'all')}
+              className="h-10 rounded-lg border border-border px-3 text-sm"
+            >
+              <option value="all">All</option>
+              <option value="pending">Pending</option>
+              <option value="approved">Approved</option>
+              <option value="denied">Denied</option>
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-muted-fg">From</label>
+            <input
+              type="date"
+              value={filterFrom}
+              onChange={(e) => setFilterFrom(e.target.value)}
+              className="h-10 rounded-lg border border-border px-3 text-sm"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-muted-fg">To</label>
+            <input
+              type="date"
+              value={filterTo}
+              onChange={(e) => setFilterTo(e.target.value)}
+              className="h-10 rounded-lg border border-border px-3 text-sm"
+            />
+          </div>
+          {(filterFrom || filterTo) && (
+            <button
+              onClick={() => {
+                setFilterFrom('')
+                setFilterTo('')
+              }}
+              className="h-10 cursor-pointer text-xs font-medium text-accent hover:underline"
+            >
+              Clear dates
+            </button>
+          )}
+        </Card>
+
         {loading && <p className="text-sm text-muted-fg">Loading…</p>}
         {!loading && requests.length === 0 && (
-          <p className="text-sm text-muted-fg">No leave requests yet.</p>
+          <p className="text-sm text-muted-fg">No leave requests match these filters.</p>
         )}
 
         {requests.map((r) => (
