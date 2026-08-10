@@ -138,3 +138,21 @@ export function nzNowMinutes(): number {
   const minute = Number(parts.find((p) => p.type === 'minute')?.value ?? '0')
   return hour * 60 + minute
 }
+
+// Minutes since midnight, in NZ wall-clock time, of a real instant (e.g. a
+// shift's clock_in_time) — the same reference frame as wallClockMinutes,
+// so a shift's actual clock-in can be compared against a roster entry's
+// planned start_time. Same reference frame as nzNowMinutes, but for a
+// specific instant rather than always "now" — needed to work out lateness
+// retrospectively (e.g. on the Hours page), not just live on Overview.
+export function nzWallClockMinutesOfInstant(iso: string): number {
+  const parts = new Intl.DateTimeFormat('en-NZ', {
+    timeZone: NZ_TIME_ZONE,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(iso))
+  const hour = Number(parts.find((p) => p.type === 'hour')?.value ?? '0')
+  const minute = Number(parts.find((p) => p.type === 'minute')?.value ?? '0')
+  return hour * 60 + minute
+}

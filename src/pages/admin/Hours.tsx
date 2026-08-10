@@ -17,9 +17,20 @@ import {
   nzEndOfDayInstant,
   nzStartOfDayInstant,
   nzStartOfMonthIso,
+  nzWallClockMinutesOfInstant,
+  wallClockMinutes,
 } from '../../utils/datetime'
 import { isNzPublicHoliday } from '../../utils/nzPublicHolidays'
 import type { AppUser, ShiftWithWorker } from '../../types'
+
+function formatLateness(minutes: number): string {
+  if (minutes >= 60) {
+    const hours = Math.floor(minutes / 60)
+    const mins = minutes % 60
+    return mins === 0 ? `${hours}h late` : `${hours}h ${mins}m late`
+  }
+  return `${minutes}m late`
+}
 
 export function AdminHours() {
   const { appUser } = useAuth()
@@ -39,6 +50,7 @@ export function AdminHours() {
   const [resolvedAddresses, setResolvedAddresses] = useState<Record<string, string>>({})
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkApproving, setBulkApproving] = useState(false)
+  const [rosterByUserDate, setRosterByUserDate] = useState<Map<string, string>>(new Map())
 
   async function load() {
     if (!appUser) return
@@ -54,9 +66,38 @@ export function AdminHours() {
 
     if (workerFilter !== 'all') query = query.eq('user_id', workerFilter)
 
-    const { data } = await query
+    const [{ data }, { data: rosterData }] = await Promise.all([
+      query,
+      // Rostered start times for the same range, so each shift's actual
+      // clock-in can be compared against when the worker was expected.
+      supabase
+        .from('roster_entries')
+        .select('user_id, date, start_time')
+        .eq('business_id', appUser.business_id)
+        .gte('date', from)
+        .lte('date', to)
+        .not('start_time', 'is', null),
+    ])
     setShifts((data as ShiftWithWorker[]) ?? [])
+    setRosterByUserDate(
+      new Map(
+        (rosterData ?? []).map((r) => [`${r.user_id}|${r.date}`, r.start_time as string])
+      )
+    )
     setLoading(false)
+  }
+
+  // Only meaningful for a shift that has a rostered start_time to compare
+  // against — a shift with no matching roster entry has nothing to be
+  // "late" relative to, so it's left out of the comparison entirely
+  // rather than guessed at.
+  function latenessFor(shift: ShiftWithWorker): { label: string; late: boolean } | null {
+    const startTime = rosterByUserDate.get(`${shift.user_id}|${nzDateIso(new Date(shift.clock_in_time))}`)
+    if (!startTime) return null
+
+    const minutesLate = nzWallClockMinutesOfInstant(shift.clock_in_time) - wallClockMinutes(startTime)
+    if (minutesLate <= 0) return { label: 'On time', late: false }
+    return { label: formatLateness(minutesLate), late: true }
   }
 
   useEffect(() => {
@@ -276,6 +317,7 @@ export function AdminHours() {
                 <th className="px-4 py-3">Date</th>
                 <th className="px-4 py-3">Clock in</th>
                 <th className="px-4 py-3">Clock out</th>
+                <th className="px-4 py-3">Lateness</th>
                 <th className="px-4 py-3">Hours</th>
                 <th className="px-4 py-3">Location</th>
                 <th className="px-4 py-3">Photo</th>
@@ -288,14 +330,14 @@ export function AdminHours() {
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={12} className="px-4 py-6 text-center text-muted-fg">
+                  <td colSpan={13} className="px-4 py-6 text-center text-muted-fg">
                     Loading…
                   </td>
                 </tr>
               )}
               {!loading && shifts.length === 0 && (
                 <tr>
-                  <td colSpan={12} className="px-4 py-6 text-center text-muted-fg">
+                  <td colSpan={13} className="px-4 py-6 text-center text-muted-fg">
                     No shifts in this range.
                   </td>
                 </tr>
@@ -350,6 +392,17 @@ export function AdminHours() {
                       </td>
                     </>
                   )}
+                  <td className="px-4 py-3">
+                    {(() => {
+                      const lateness = latenessFor(shift)
+                      if (!lateness) return <span className="text-muted-fg">—</span>
+                      return (
+                        <span className={lateness.late ? 'text-warning' : 'text-muted-fg'}>
+                          {lateness.label}
+                        </span>
+                      )
+                    })()}
+                  </td>
                   <td className="px-4 py-3 text-muted-fg">{formatHours(shiftHours(shift))}</td>
                   <td className="px-4 py-3">
                     {shift.gps_lat != null && shift.gps_lng != null ? (
