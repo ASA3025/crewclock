@@ -57,6 +57,21 @@ create table public.roster_entries (
   -- any timezone conversion (unlike shifts.clock_in_time).
   start_time time,
   end_time time,
+  -- A plain copy of the work_types row's name at assignment time, not a
+  -- foreign key — deliberately denormalized so renaming or deleting a
+  -- work type later never rewrites what an already-assigned roster entry
+  -- says, same reasoning as worker_note_replies.author_name.
+  work_type text,
+  created_at timestamptz not null default now()
+);
+
+-- An admin-managed, per-business list of work types (e.g. "kick out",
+-- "pole work") offered as a picker when assigning a roster entry. Not
+-- referenced by roster_entries via foreign key — see the comment there.
+create table public.work_types (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid not null references public.businesses (id) on delete cascade,
+  name text not null,
   created_at timestamptz not null default now()
 );
 
@@ -134,6 +149,7 @@ create index worker_note_replies_note_id_idx on public.worker_note_replies (work
 create index worker_note_replies_business_id_idx on public.worker_note_replies (business_id);
 create index leave_requests_business_id_idx on public.leave_requests (business_id);
 create index leave_requests_user_id_idx on public.leave_requests (user_id);
+create index work_types_business_id_idx on public.work_types (business_id);
 
 -- ---------------------------------------------------------------------------
 -- Helper functions (security definer so RLS policies on `users` don't
@@ -172,6 +188,7 @@ alter table public.roster_entries enable row level security;
 alter table public.worker_notes enable row level security;
 alter table public.worker_note_replies enable row level security;
 alter table public.leave_requests enable row level security;
+alter table public.work_types enable row level security;
 
 -- businesses: read-only from the client, scoped to your own business.
 -- Rows are created manually (see SETUP.md) using the Supabase service role,
@@ -228,6 +245,22 @@ create policy "admin update business roster" on public.roster_entries
   with check (public.app_role() = 'admin' and business_id = public.app_business_id());
 
 create policy "admin delete business roster" on public.roster_entries
+  for delete using (public.app_role() = 'admin' and business_id = public.app_business_id());
+
+-- work_types: admin-only in every direction — workers never query this
+-- table directly, they only ever see the resulting roster_entries.work_type
+-- text copy (see that column's comment).
+create policy "admin select business work types" on public.work_types
+  for select using (public.app_role() = 'admin' and business_id = public.app_business_id());
+
+create policy "admin insert business work types" on public.work_types
+  for insert with check (public.app_role() = 'admin' and business_id = public.app_business_id());
+
+create policy "admin update business work types" on public.work_types
+  for update using (public.app_role() = 'admin' and business_id = public.app_business_id())
+  with check (public.app_role() = 'admin' and business_id = public.app_business_id());
+
+create policy "admin delete business work types" on public.work_types
   for delete using (public.app_role() = 'admin' and business_id = public.app_business_id());
 
 -- worker_notes

@@ -46,6 +46,14 @@ export interface RosterEntry {
   location_label: string
   start_time: string | null
   end_time: string | null
+  work_type: string | null
+  created_at: string
+}
+
+export interface WorkType {
+  id: string
+  business_id: string
+  name: string
   created_at: string
 }
 

@@ -65,6 +65,24 @@ const WEATHER_ERROR_MESSAGES: Partial<Record<WeatherStatus, string>> = {
   fetch_failed: "Weather unavailable — couldn't reach the weather service",
 }
 
+// Checked once on load via the Permissions API (no prompt, just reads the
+// current state) so a worker finds out *before* trying to clock in that
+// location isn't set up, rather than only discovering it mid clock-in —
+// this is separate from gpsStatus below, which only exists once a clock-in
+// attempt has actually been made.
+type LocationPermission = 'unknown' | 'granted' | 'prompt' | 'denied' | 'insecure_context' | 'unsupported'
+
+const LOCATION_PERMISSION_MESSAGES: Partial<Record<LocationPermission, string>> = {
+  insecure_context:
+    "This page isn't loaded securely, so your browser blocks location entirely — GPS-verified clock-in won't be able to record where you clocked in.",
+  unsupported:
+    "This browser doesn't support location services — GPS-verified clock-in won't be able to record where you clocked in.",
+  denied:
+    "Location access is off for this site, so clock-in won't record where you were. To enable it: check your phone's Settings for this browser's location permission (or tap the site info/lock icon next to the address bar) and allow location access.",
+  prompt:
+    "Clock-in captures your location to verify your shift — you'll be asked to allow it the first time you clock in.",
+}
+
 function elapsedHours(startIso: string): number {
   return Math.max((Date.now() - new Date(startIso).getTime()) / 1000 / 60 / 60, 0)
 }
@@ -92,6 +110,7 @@ export function WorkerHome() {
   const [flagRosterOpen, setFlagRosterOpen] = useState(false)
   const [weather, setWeather] = useState<CurrentWeather | null>(null)
   const [weatherStatus, setWeatherStatus] = useState<WeatherStatus>('locating')
+  const [locationPermission, setLocationPermission] = useState<LocationPermission>('unknown')
 
   useEffect(() => {
     if (!appUser) return
@@ -201,6 +220,33 @@ export function WorkerHome() {
       // clock-in, a position up to 10 minutes old is perfectly fine here.
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 10 * 60 * 1000 }
     )
+  }, [])
+
+  // Read-only check via the Permissions API — never triggers the actual
+  // browser prompt, just reports whatever's already been decided (or that
+  // nothing has been decided yet). Clock-in itself is never blocked by
+  // this either way, per the non-blocking design already used for GPS
+  // status in handleClockIn/getLocation below.
+  useEffect(() => {
+    if (!window.isSecureContext) {
+      setLocationPermission('insecure_context')
+      return
+    }
+    if (!navigator.geolocation) {
+      setLocationPermission('unsupported')
+      return
+    }
+    if (!navigator.permissions?.query) {
+      setLocationPermission('unknown')
+      return
+    }
+    navigator.permissions
+      .query({ name: 'geolocation' })
+      .then((status) => {
+        setLocationPermission(status.state as LocationPermission)
+        status.onchange = () => setLocationPermission(status.state as LocationPermission)
+      })
+      .catch(() => setLocationPermission('unknown'))
   }, [])
 
   function getLocation(): Promise<{ lat: number | null; lng: number | null }> {
@@ -325,6 +371,19 @@ export function WorkerHome() {
         )}
       </Card>
 
+      {LOCATION_PERMISSION_MESSAGES[locationPermission] && (
+        <Card
+          className={
+            locationPermission === 'prompt'
+              ? 'flex items-start gap-2 text-muted-fg'
+              : 'flex items-start gap-2 !border-warning/40 !bg-warning/5 text-warning'
+          }
+        >
+          <Warning size={16} weight="fill" className="mt-0.5 shrink-0" />
+          <p className="text-xs leading-relaxed">{LOCATION_PERMISSION_MESSAGES[locationPermission]}</p>
+        </Card>
+      )}
+
       <Card className="flex flex-col items-center gap-4 py-8 text-center">
         {openShift ? (
           <>
@@ -408,6 +467,9 @@ export function WorkerHome() {
         {todayRoster ? (
           <>
             <p className="text-sm text-fg">{todayRoster.location_label}</p>
+            {todayRoster.work_type && (
+              <p className="mt-0.5 text-sm font-medium text-accent">{todayRoster.work_type}</p>
+            )}
             {formatShiftTimeRange(todayRoster.start_time, todayRoster.end_time) && (
               <p className="mt-1 text-xs text-muted-fg">
                 {formatShiftTimeRange(todayRoster.start_time, todayRoster.end_time)}

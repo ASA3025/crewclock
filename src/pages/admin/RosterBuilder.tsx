@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react'
-import { CaretLeft, CaretRight, Trash, Plus, Warning } from '@phosphor-icons/react'
+import { CaretLeft, CaretRight, Trash, Plus, Warning, Gear, PencilSimple, Check, X } from '@phosphor-icons/react'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabaseClient'
 import { PageHeader } from '../../components/PageHeader'
 import { Card } from '../../components/Card'
 import { Button } from '../../components/Button'
+import { Modal } from '../../components/Modal'
 import { formatNzDate, formatShiftTimeRange, nzDateIso } from '../../utils/datetime'
 import { isNzPublicHoliday } from '../../utils/nzPublicHolidays'
-import type { AppUser, LeaveRequest, RosterEntryWithWorker } from '../../types'
+import type { AppUser, LeaveRequest, RosterEntryWithWorker, WorkType } from '../../types'
 
 function startOfWeek(d: Date) {
   const date = new Date(d)
@@ -28,7 +29,13 @@ export function AdminRosterBuilder() {
   const [formLocation, setFormLocation] = useState('')
   const [formStartTime, setFormStartTime] = useState('')
   const [formEndTime, setFormEndTime] = useState('')
+  const [formWorkType, setFormWorkType] = useState('')
   const [approvedLeave, setApprovedLeave] = useState<LeaveRequest[]>([])
+  const [workTypes, setWorkTypes] = useState<WorkType[]>([])
+  const [manageOpen, setManageOpen] = useState(false)
+  const [newTypeName, setNewTypeName] = useState('')
+  const [editingTypeId, setEditingTypeId] = useState<string | null>(null)
+  const [editingTypeName, setEditingTypeName] = useState('')
 
   const days = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(weekStart)
@@ -80,10 +87,54 @@ export function AdminRosterBuilder() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appUser])
 
+  function loadWorkTypes() {
+    if (!appUser) return
+    supabase
+      .from('work_types')
+      .select('*')
+      .eq('business_id', appUser.business_id)
+      .order('name')
+      .then(({ data }) => setWorkTypes((data as WorkType[]) ?? []))
+  }
+
+  useEffect(() => {
+    loadWorkTypes()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appUser])
+
   useEffect(() => {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appUser, weekStart])
+
+  async function addWorkType() {
+    if (!appUser || !newTypeName.trim()) return
+    await supabase
+      .from('work_types')
+      .insert({ business_id: appUser.business_id, name: newTypeName.trim() })
+    setNewTypeName('')
+    loadWorkTypes()
+  }
+
+  function startEditType(wt: WorkType) {
+    setEditingTypeId(wt.id)
+    setEditingTypeName(wt.name)
+  }
+
+  async function saveEditType() {
+    if (!editingTypeId || !editingTypeName.trim()) return
+    await supabase
+      .from('work_types')
+      .update({ name: editingTypeName.trim() })
+      .eq('id', editingTypeId)
+    setEditingTypeId(null)
+    loadWorkTypes()
+  }
+
+  async function deleteWorkType(id: string) {
+    await supabase.from('work_types').delete().eq('id', id)
+    loadWorkTypes()
+  }
 
   function openForm(dayIso: string) {
     setFormDay(dayIso)
@@ -91,6 +142,7 @@ export function AdminRosterBuilder() {
     setFormLocation('')
     setFormStartTime('')
     setFormEndTime('')
+    setFormWorkType('')
   }
 
   async function addEntry() {
@@ -100,6 +152,7 @@ export function AdminRosterBuilder() {
       user_id: formWorker,
       date: formDay,
       location_label: formLocation.trim(),
+      work_type: formWorkType || null,
       start_time: formStartTime || null,
       end_time: formEndTime || null,
     })
@@ -141,6 +194,15 @@ export function AdminRosterBuilder() {
         }
       />
 
+      <div className="flex justify-end px-4 pt-4 md:px-8 md:pt-8">
+        <button
+          onClick={() => setManageOpen(true)}
+          className="flex cursor-pointer items-center gap-1.5 text-xs font-medium text-accent hover:underline"
+        >
+          <Gear size={14} /> Manage work types
+        </button>
+      </div>
+
       <div className="grid gap-3 p-4 md:grid-cols-7 md:p-8">
         {days.map((day) => {
           const dayIso = nzDateIso(day)
@@ -167,6 +229,9 @@ export function AdminRosterBuilder() {
                   <div>
                     <p className="text-sm font-medium text-fg">{entry.users.name}</p>
                     <p className="text-xs text-muted-fg">{entry.location_label}</p>
+                    {entry.work_type && (
+                      <p className="text-xs text-accent">{entry.work_type}</p>
+                    )}
                     {formatShiftTimeRange(entry.start_time, entry.end_time) && (
                       <p className="text-xs text-muted-fg">
                         {formatShiftTimeRange(entry.start_time, entry.end_time)}
@@ -207,6 +272,18 @@ export function AdminRosterBuilder() {
                     placeholder="e.g. Bush Rd Orchard, Block 4"
                     className="h-9 rounded-md border border-border px-2 text-xs"
                   />
+                  <select
+                    value={formWorkType}
+                    onChange={(e) => setFormWorkType(e.target.value)}
+                    className="h-9 rounded-md border border-border px-2 text-xs"
+                  >
+                    <option value="">No work type</option>
+                    {workTypes.map((wt) => (
+                      <option key={wt.id} value={wt.name}>
+                        {wt.name}
+                      </option>
+                    ))}
+                  </select>
                   <div className="flex flex-col gap-1">
                     <label className="text-[10px] font-medium text-muted-fg">Start (optional)</label>
                     <input
@@ -253,6 +330,85 @@ export function AdminRosterBuilder() {
           )
         })}
       </div>
+
+      <Modal open={manageOpen} onClose={() => setManageOpen(false)} title="Manage work types">
+        <div className="flex flex-col gap-4">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              addWorkType()
+            }}
+            className="flex gap-2"
+          >
+            <input
+              value={newTypeName}
+              onChange={(e) => setNewTypeName(e.target.value)}
+              placeholder="e.g. Pole work"
+              className="h-10 flex-1 rounded-lg border border-border px-3 text-sm outline-none focus:border-accent"
+            />
+            <Button type="submit" size="md" className="h-10 px-3 text-xs" disabled={!newTypeName.trim()}>
+              Add
+            </Button>
+          </form>
+
+          <div className="flex flex-col gap-2">
+            {workTypes.length === 0 && (
+              <p className="text-sm text-muted-fg">No work types yet — add one above.</p>
+            )}
+            {workTypes.map((wt) => (
+              <div
+                key={wt.id}
+                className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2"
+              >
+                {editingTypeId === wt.id ? (
+                  <>
+                    <input
+                      value={editingTypeName}
+                      onChange={(e) => setEditingTypeName(e.target.value)}
+                      autoFocus
+                      className="h-9 flex-1 rounded-md border border-border px-2 text-sm outline-none focus:border-accent"
+                    />
+                    <button
+                      onClick={saveEditType}
+                      aria-label="Save"
+                      className="cursor-pointer rounded-md p-2 text-success hover:bg-muted"
+                    >
+                      <Check size={16} />
+                    </button>
+                    <button
+                      onClick={() => setEditingTypeId(null)}
+                      aria-label="Cancel edit"
+                      className="cursor-pointer rounded-md p-2 text-muted-fg hover:bg-muted"
+                    >
+                      <X size={16} />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-sm text-fg">{wt.name}</span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => startEditType(wt)}
+                        aria-label={`Edit ${wt.name}`}
+                        className="cursor-pointer rounded-md p-2 text-muted-fg transition-colors duration-150 hover:bg-muted hover:text-fg"
+                      >
+                        <PencilSimple size={16} />
+                      </button>
+                      <button
+                        onClick={() => deleteWorkType(wt.id)}
+                        aria-label={`Delete ${wt.name}`}
+                        className="cursor-pointer rounded-md p-2 text-muted-fg transition-colors duration-150 hover:bg-destructive/10 hover:text-destructive"
+                      >
+                        <Trash size={16} />
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }

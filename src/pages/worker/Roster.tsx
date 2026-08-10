@@ -76,6 +76,9 @@ export function WorkerRoster() {
               <p className="mt-1 flex items-center gap-1 text-sm text-muted-fg">
                 <MapPin size={14} /> {entry.location_label}
               </p>
+              {entry.work_type && (
+                <p className="mt-0.5 text-sm font-medium text-accent">{entry.work_type}</p>
+              )}
               {formatShiftTimeRange(entry.start_time, entry.end_time) && (
                 <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-fg">
                   <Clock size={13} /> {formatShiftTimeRange(entry.start_time, entry.end_time)}
